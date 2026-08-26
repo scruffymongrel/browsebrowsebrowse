@@ -9,19 +9,36 @@
 // nothing else.
 //
 // `bun pm pack` triggers prepack, so the tarball under test is always freshly
-// built. Both runtimes are asserted because both are invoked in the wild — the
-// shebang says node, but `bunx bbb` runs it under Bun.
+// built. Every runtime we claim is asserted here, because all three are invoked
+// in the wild:
+//
+//   1. Each runtime handed dist/cli.js explicitly. The shebang says node, but
+//      `bunx bbb` and `deno run -A npm:browsebrowsebrowse` never read it — they
+//      hand the file to their own loader. Deno's node-compat carries the whole
+//      stack: puppeteer-core's node:child_process spawn of Chrome, the CDP
+//      websocket, and the daemon's node:net probes all work (verified end to
+//      end against a real engine, not just this engine-free assertion).
+//   2. The bin aliases (`browsebrowsebrowse`, `bbb`) executed directly through
+//      the node_modules/.bin symlink with **only Node** on PATH. That is the
+//      shebang path, and node-only is the honest scope of it: a bun-only box
+//      with no Node cannot run the installed bin directly. `bunx` covers that
+//      box, and engines claims node and nothing else for the same reason.
 //
 // Engine-free by design: nothing here downloads a browser.
 import { execFileSync, execSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, rmSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { requireNodeOrSkip } from './node-bin.mjs'
+import { dirname, join } from 'node:path'
+import { requireNodeOrSkip, requireDenoOrSkip } from './runtimes.mjs'
 
 const dir = mkdtempSync(join(tmpdir(), 'bbb-pack-'))
 const cache = join(dir, 'cache')
 let failed = false
+
+const okShape = out => {
+  const parsed = JSON.parse(out)
+  return parsed.ok && Array.isArray(parsed.result.installed) ? 'ok' : `wrong shape: ${out.trim()}`
+}
 
 try {
   execSync(`bun pm pack --destination "${dir}"`, { stdio: 'ignore' })
@@ -34,13 +51,19 @@ try {
   const bin = join(dir, 'node_modules', 'browsebrowsebrowse', 'dist', 'cli.js')
   const env = { ...process.env, BBB_CACHE_DIR: cache, CHROME_PATH: '' }
 
-  // Node is a target runtime, not a toolchain requirement — skip its half when
-  // Node isn't installed. CI always has it, so the gate still holds there.
+  // Node and Deno are target runtimes, not toolchain requirements — skip their
+  // halves when they aren't installed. CI has both, so the gate still holds
+  // there.
   const node = requireNodeOrSkip('installed package via node')
+  const deno = requireDenoOrSkip('installed package via deno')
 
   for (const [runtime, argv] of [
     ['bun', ['bun', bin]],
     ...(node ? [['node', [node, bin]]] : []),
+    // -A because bbb reads the engine cache, spawns Chrome and opens sockets;
+    // Deno's default is deny-all, and the documented invocation is
+    // `deno run -A`.
+    ...(deno ? [['deno', [deno, 'run', '-A', bin]]] : []),
   ]) {
     let result
     try {
@@ -49,18 +72,47 @@ try {
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe'],
       })
-      const parsed = JSON.parse(out)
-      result = parsed.ok && Array.isArray(parsed.result.installed) ? 'ok' : `wrong shape: ${out.trim()}`
+      result = okShape(out)
     } catch (e) {
       const msg = `${e.stderr ?? e.message}`
       result = msg.includes('ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING')
-        ? 'FAILS: Node will not type-strip under node_modules'
+        ? 'FAILS: the runtime will not type-strip under node_modules'
         : `FAILS: ${msg.split('\n')[0]}`
     }
 
     console.log(`installed package via ${runtime}: ${result}`)
     if (result !== 'ok') failed = true
+  }
 
+  // Second pass: the *bin aliases* themselves, each invoked the way a package
+  // manager's PATH entry invokes them — as the node_modules/.bin symlink,
+  // executed directly so the OS reads the shebang, rather than
+  // `<runtime> path/to/cli.js`. Node's directory is the only runtime on PATH
+  // (plus /usr/bin for `env` itself), so this proves the shebang resolves with
+  // no other runtime installed, and that `bbb` reaches the same working bin.
+  if (node) {
+    for (const name of ['browsebrowsebrowse', 'bbb']) {
+      const binPath = join(dir, 'node_modules', '.bin', name)
+      let result
+      try {
+        result = okShape(
+          execFileSync(binPath, ['engine', 'list', '--json'], {
+            encoding: 'utf8',
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: {
+              PATH: [dirname(node), '/usr/bin', '/bin'].join(':'),
+              BBB_CACHE_DIR: cache,
+              CHROME_PATH: '',
+            },
+          }),
+        )
+      } catch (e) {
+        result = `FAILS: ${(e.stderr ?? e.message).toString().split('\n')[0]}`
+      }
+
+      console.log(`bin alias '${name}' via node-only PATH: ${result}`)
+      if (result !== 'ok') failed = true
+    }
   }
 
   // The plugin manifest and the skill ship inside the tarball; a `files:` typo

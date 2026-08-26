@@ -16,7 +16,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { requireNodeOrSkip } from './node-bin.mjs'
+import { requireNodeOrSkip } from './runtimes.mjs'
 
 const node = requireNodeOrSkip('node smoke')
 if (!node) process.exit(0)

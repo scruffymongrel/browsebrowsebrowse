@@ -52,6 +52,13 @@ jobs:
           node-version: '24'
           registry-url: https://registry.npmjs.org
 
+      # Deno is a target runtime and smoke:pack gates it. The release gate and
+      # the PR gate must run the same checks or a release can fail on something
+      # PR CI never ran — keep this in step with test.yml.
+      - uses: denoland/setup-deno@v2.0.5
+        with:
+          deno-version: v2.x
+
       # Trusted publishing requires npm >= 11.5.1, newer than what Node bundles.
       - name: Update npm
         run: npm install -g npm@latest
@@ -65,6 +72,13 @@ jobs:
       # Node is the target runtime but bun:test can only exercise Bun.
       - name: Node smoke test
         run: bun run smoke:node
+
+      # The packaging gate: packs the tarball, installs it, runs the installed
+      # bin under Node, Bun and Deno. test.yml has always run this; release.yml
+      # did not, and that divergence is how a release broke on a check PR CI had
+      # never run. The two workflows gate on the same things — keep them so.
+      - name: Packed-tarball smoke test
+        run: bun run smoke:pack
 
       # The real engine, once, at release time. PR CI stays engine-free; a
       # release is the point where "does it actually drive Chrome" has to be

@@ -21,6 +21,10 @@ jobs:
   # shipped bin's shebang is node. Without this, a Node-only break would only
   # surface at release time, or for a user.
   #
+  # smoke:pack also exercises Deno, hence setup-deno here. The job keeps the id
+  # `node` on purpose: it is a required status check, and renaming it would make
+  # branch protection wait forever on a check that no longer runs.
+  #
   # Neither job installs a Chrome engine. Both are deliberately engine-free, so
   # PR CI never spends 180MB and a minute of download on checks that are really
   # about module resolution and packaging.
@@ -34,11 +38,14 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
+      - uses: denoland/setup-deno@v2.0.5
+        with:
+          deno-version: v2.x
       - run: bun install --frozen-lockfile
       - run: bun run smoke:node
       # Installs the packed tarball and runs it the way users get it, which
       # smoke:node can't — it runs the .ts from the checkout, where Node's type
-      # stripping is allowed and node_modules' isn't.
+      # stripping is allowed and node_modules' isn't. Gates Node, Bun and Deno.
       - run: bun run smoke:pack
 
   # The browser-touching half. Separated because it downloads a ~180MB engine,

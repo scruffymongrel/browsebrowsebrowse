@@ -36,9 +36,24 @@ Both `browsebrowsebrowse` and `bbb` are installed. Or run it with no install:
 ```sh
 bunx browsebrowsebrowse shot https://example.com out.png
 npx --yes browsebrowsebrowse shot https://example.com out.png
+deno run -A npm:browsebrowsebrowse shot https://example.com out.png
 ```
 
-**Runtime: Node ≥ 22.12** (puppeteer-core's floor). That is the whole runtime story — the shipped bin's shebang is `node` and `engines` claims nothing else. Bun runs it too when you invoke it explicitly (`bunx browsebrowsebrowse`, `bun $(which bbb)`), and that path is covered by CI, but a Bun-only machine with no Node on `PATH` is not a supported install.
+### Runtimes
+
+`bbb` ships compiled ESM, which three runtimes execute. Each has its own way in, and all three are gated by `bun run smoke:pack` in CI.
+
+| Runtime | Install | Run |
+| ------- | ------- | --- |
+| **Node ≥ 22.12** | `npm i -g browsebrowsebrowse` | `bbb …` — the shipped bin's shebang is `#!/usr/bin/env -S node`, so this is the shebang path |
+| **Bun** | `bun add -g browsebrowsebrowse` | `bunx browsebrowsebrowse …` — Bun's loader runs the file directly and never reads the shebang |
+| **Deno ≥ 2** | `deno install -g -A npm:browsebrowsebrowse` | `deno run -A npm:browsebrowsebrowse …` |
+
+`engines` claims **`node >=22.12.0` and nothing else** — puppeteer-core's own floor, asserted against its `package.json` by a test. That is deliberate and it is the honest claim: the shebang is the only thing the package controls, and it can only guarantee Node.
+
+One real gap follows from that. On a **Bun-only machine with no Node on `PATH`**, `bun add -g browsebrowsebrowse` puts `bbb` on `PATH` but running it *directly* fails — the OS resolves the shebang's interpreter before Bun gets a say. Use `bunx browsebrowsebrowse …` there; it bypasses the shebang entirely and is covered by CI.
+
+Deno needs neither Node nor the shebang: `deno install -g` writes its own `#!/bin/sh` shim that execs `deno run -A npm:browsebrowsebrowse`, so the package's shebang is never consulted. It installs one command per invocation, named after the package; for the short alias use `deno install -g -A --name bbb npm:browsebrowsebrowse` (both bins are the same file). Deno's node-compat carries the whole stack — spawning Chrome through `node:child_process`, the CDP websocket, and the daemon's `node:net` port probes — verified end to end against a real engine, not just asserted.
 
 ### The engine
 
@@ -161,7 +176,7 @@ export default async ({ browser, page, args, goto, puppeteer }) => {
 bbb --json run flow.mjs http://localhost:3000 --depth 3
 ```
 
-A returned value prints as JSON. `args` is everything after the script path — **bbb's own flags must come before it**, since anything after belongs to the script. Prefer `.mjs`; a `.ts` script needs a runtime that strips types (Node ≥22.18, or Bun).
+A returned value prints as JSON. `args` is everything after the script path — **bbb's own flags must come before it**, since anything after belongs to the script. Prefer `.mjs`; a `.ts` script needs a runtime that handles types (Node ≥22.18, Bun, or Deno).
 
 ## Streaming pages: the one gotcha
 
@@ -241,8 +256,10 @@ bun run quality           # tsc --noEmit + the coverage-gated unit tests
 bun run test:integration  # the browser-touching suite (needs an engine)
 bun run build             # compile dist/ (also runs via prepack)
 bun run smoke:node        # run the CLI from the checkout under Node
-bun run smoke:pack        # pack, install the tarball, run it under Node AND Bun
+bun run smoke:pack        # pack, install the tarball, run it under Node, Bun AND Deno
 ```
+
+`smoke:pack` is the one that matters for packaging: it packs the tarball, installs it into a scratch project, and runs the *installed* binary under all three runtimes — plus both bin aliases through the `node_modules/.bin` shebang path, with only Node on `PATH`. Testing the checkout alone is what let a broken Node install ship three times in the sibling project. Node and Deno skip with a notice when they aren't installed locally, and hard-fail instead when `CI` is set so a missing runtime can't pass silently.
 
 Coverage is enforced at **100% lines and functions**, but deliberately only over `src/pure/` — the argument parser, the engine resolver, URL normalisation, version comparison and output shaping. The browser-touching code is covered by `test/integration/`, which drives a real Chrome and is outside the gate. Chasing 100% across a process-spawning, CDP-speaking codebase would mean testing mocks of Chrome instead of Chrome, and a green number built out of mocks is worse than an honest gap.
 
@@ -260,7 +277,7 @@ Fully automated; no manual steps and no npm token.
 gh workflow run release.yml -f bump=patch|minor|major
 ```
 
-CI runs the quality gate, the Node smoke test and the integration suite, then bumps the version, commits, tags, pushes and publishes to npm via [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) with provenance. It refuses to run anywhere but `main`.
+CI runs the quality gate, the Node smoke test, the packed-tarball smoke test and the integration suite, then bumps the version, commits, tags, pushes and publishes to npm via [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) with provenance. It refuses to run anywhere but `main`. `release.yml` and `test.yml` gate on the same checks on purpose — they drifted once and a release broke on a step PR CI had never run.
 
 The same run fast-forwards the `release` branch, which is the Claude Code plugin channel.
 

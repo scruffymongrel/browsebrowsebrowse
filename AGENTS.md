@@ -32,9 +32,14 @@ gh workflow run release.yml -f bump=patch|minor|major
 gh run watch
 ```
 
-CI then runs: quality gate → Node smoke test → engine install → integration
-tests → `npm version` (bump + `chore(release): vX.Y.Z` commit + annotated tag) →
-push → `npm publish` via Trusted Publishing (OIDC) → fast-forward `release`.
+CI then runs: quality gate → Node smoke test → packed-tarball smoke test →
+engine install → integration tests → `npm version` (bump + `chore(release):
+vX.Y.Z` commit + annotated tag) → push → `npm publish` via Trusted Publishing
+(OIDC) → fast-forward `release`.
+
+**`release.yml` and `test.yml` must gate on the same checks.** They drifted once
+— `test.yml` grew a step `release.yml` didn't have — and a release broke on
+something PR CI had never run. Add a gate to one, add it to the other.
 
 Invariants — these are the ways to get it wrong:
 
@@ -89,7 +94,7 @@ Invariants — these are the ways to get it wrong:
 bun run quality           # tsc --noEmit + coverage-gated unit tests
 bun run test:integration  # the browser-touching suite (needs an engine)
 bun run smoke:node        # runs the CLI from the checkout under Node
-bun run smoke:pack        # packs, installs the tarball, runs it under Node AND Bun
+bun run smoke:pack        # packs, installs the tarball, runs it under Node, Bun AND Deno
 bun run build             # compile dist/ (runs automatically via prepack)
 ```
 
@@ -117,9 +122,27 @@ bun run build             # compile dist/ (runs automatically via prepack)
   `bun pm pack` / `bun add`. Node is a *target* runtime, not a build dependency.
 - **One runtime story, and it is true.** `engines` claims `node >=22.12.0` and
   nothing else — that is puppeteer-core's own floor, asserted against its
-  `package.json` by a test — and the shipped shebang is `node`. Bun runs the
-  built CLI too and `smoke:pack` proves it, but a Bun-only box with no Node on
-  PATH is not a supported install and `engines` must not pretend otherwise.
+  `package.json` by a test — and the shipped shebang is `#!/usr/bin/env -S node`.
+  That is the honest scope of the shebang, which is the only thing the package
+  controls.
+
+  Three runtimes execute the built CLI and `smoke:pack` gates all three: Node
+  through the shebang, Bun through its own loader (`bunx browsebrowsebrowse`),
+  and Deno through `deno run -A` (`deno install -g` writes its own `/bin/sh`
+  shim that execs `deno run npm:browsebrowsebrowse`, so the shebang is never
+  consulted there either). Running under a runtime is not the same as `engines`
+  claiming it: a Bun-only box with no Node on PATH cannot execute the installed
+  bin *directly*, `bunx` is the answer there, and `engines` must not pretend
+  otherwise. Don't add `bun` or `deno` keys to `engines`; a test asserts `node`
+  is the only one.
+
+  Deno support is measured, not assumed. Despite spawning Chrome through
+  `node:child_process`, speaking CDP over a websocket and probing ports with
+  `node:net`, the whole surface works under Deno 2.9 node-compat — `eval`,
+  `shot`, `pdf`, `html`, `text`, `run`, and the full `serve`/`stop` daemon
+  lifecycle, verified against a real engine. If that ever regresses, narrow the
+  claim in the README and the skill rather than leaving a skill that tells an
+  agent to run something broken.
 - **PR CI never downloads an engine.** `smoke:node` and `smoke:pack` assert
   things that hold with no Chrome installed (help, `engine list`, the
   `--no-install` refusal, the CHROME_PATH-is-a-directory rejection). The
@@ -130,7 +153,7 @@ bun run build             # compile dist/ (runs automatically via prepack)
   domdomdom that shipped three times — Node refuses to strip types under
   `node_modules`, so a `.ts` bin threw on every npm+Node install with CI green
   throughout. This package ships compiled JS, and `smoke:pack` installs the real
-  tarball and gates on both runtimes. When you change anything about packaging,
+  tarball and gates on all three runtimes. When you change anything about packaging,
   trust `smoke:pack` and nothing else.
 - **`dist/` is built, gitignored, and never hand-edited.** `prepack` builds it,
   so `npm pack` and `npm publish` always compile fresh. Source stays `.ts`.

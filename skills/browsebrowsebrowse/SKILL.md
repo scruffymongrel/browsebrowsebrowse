@@ -43,7 +43,22 @@ If a global install isn't available, every command below works with a no-install
 ```sh
 bunx browsebrowsebrowse shot https://example.com out.png
 npx --yes browsebrowsebrowse shot https://example.com out.png
+deno run -A npm:browsebrowsebrowse shot https://example.com out.png
 ```
+
+### Which runtime you are on
+
+The bin ships compiled ESM with a `#!/usr/bin/env -S node` shebang. All three runtimes work, but they get in differently:
+
+| Runtime | Global install | No-install |
+| ------- | -------------- | ---------- |
+| Node ≥ 22.12 | `npm i -g browsebrowsebrowse`, then `bbb …` | `npx --yes browsebrowsebrowse …` |
+| Bun | `bun add -g browsebrowsebrowse`, then `bbb …` — **needs Node also present**, because the OS resolves the shebang | `bunx browsebrowsebrowse …` (no Node needed) |
+| Deno ≥ 2 | `deno install -g -A npm:browsebrowsebrowse` — Deno writes its own shim, the shebang is never read | `deno run -A npm:browsebrowsebrowse …` |
+
+One gap worth knowing: on a **Bun-only machine with no Node on `PATH`**, a globally installed `bbb` cannot be run *directly* — use `bunx browsebrowsebrowse …` instead. Everything else in this skill is identical on all three.
+
+`deno install -g` installs one command, named after the package. For the short alias: `deno install -g -A --name bbb npm:browsebrowsebrowse`.
 
 Check with `bbb doctor`. On first use `bbb` needs a Chrome engine (~180MB, one-time, shared across all projects): at a terminal it installs one after printing a notice; anywhere non-interactive it exits 3 and prints `bbb engine install stable`. It **never** downloads unprompted in CI.
 
@@ -139,7 +154,7 @@ export default async ({ page, goto }) => {
 ```sh
 bbb run flow.mjs --json
 ```
-Contract: `export default async ({ browser, page, args, goto, puppeteer }) => value`. A returned value prints as JSON. `args` is everything after the script path — bbb's own flags must come *before* it. Prefer `.mjs`; a `.ts` script needs Node ≥22.18 or Bun.
+Contract: `export default async ({ browser, page, args, goto, puppeteer }) => value`. A returned value prints as JSON. `args` is everything after the script path — bbb's own flags must come *before* it. Prefer `.mjs`; a `.ts` script needs Node ≥22.18, Bun, or Deno.
 
 ## Engine management
 
