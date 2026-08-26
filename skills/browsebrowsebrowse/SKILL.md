@@ -18,7 +18,7 @@ Headless Chrome from the shell. Powered by `chrome-headless-shell` + puppeteer-c
 | Streaming page (SSE / htmx / long-poll) you must see settle  | **`bbb --wait`**    | Needs a real event loop      |
 | The user's own logged-in browser, their cookies, their tabs  | **claude-in-chrome**| Only it has that session     |
 
-**`domdomdom` is significantly cheaper and you should prefer it whenever both would work.** Its binary is `domdomdom` — there is no `ddd` on PATH, whatever the two tools get called in conversation.
+**`domdomdom` is significantly cheaper and you should prefer it whenever both would work.** Its binary is `domdomdom`; `ddd` is a shorthand alias added in domdomdom 0.3.0. Write `domdomdom` in commands unless you have confirmed a 0.3.0-or-newer install — it works on every version.
 
 |              | `domdomdom`          | `bbb` cold          | `bbb` daemonised       |
 | ------------ | -------------------- | ------------------- | ---------------------- |

@@ -18,9 +18,9 @@ changing both.**
 Most of `skills/browsebrowsebrowse/SKILL.md` is about routing *away* from this
 tool towards `domdomdom`. That is on purpose: `bbb` costs a 180MB engine,
 ~0.8-1.2s cold, and ~180MB resident while daemonised, and most page work needs
-none of it. Note domdomdom's only bin is `domdomdom` — there is no `ddd` on
-PATH, however the pair get referred to in conversation, so never write `ddd` in
-a command an agent is meant to run.
+none of it. Note domdomdom ships `domdomdom` on every version and gained a `ddd`
+alias in 0.3.0, so a command written against `ddd` breaks on older installs.
+Write `domdomdom` unless the newer version is confirmed.
 
 ## Releasing to npm
 
