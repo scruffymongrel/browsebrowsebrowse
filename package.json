@@ -1,6 +1,6 @@
 {
   "name": "browsebrowsebrowse",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Headless Chrome CLI for coding agents. Screenshots, PDFs, rendered HTML/text and page JS from the shell — cold by default, optionally daemonised. Sibling of domdomdom, which does DOM work with no browser at all.",
   "type": "module",
   "main": "./dist/index.js",
