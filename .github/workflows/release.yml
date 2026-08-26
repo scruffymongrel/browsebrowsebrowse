@@ -69,6 +69,14 @@ jobs:
       # The real engine, once, at release time. PR CI stays engine-free; a
       # release is the point where "does it actually drive Chrome" has to be
       # answered rather than assumed.
+      # Must match the equivalent step in test.yml. Ubuntu 23.10+ blocks
+      # unprivileged user namespaces via AppArmor and Chrome's sandbox needs
+      # them; without this every launch dies with "No usable sandbox!". We
+      # restore the namespaces rather than pass --no-sandbox, so the release
+      # gate exercises the sandboxed configuration real users run.
+      - name: Allow Chrome's sandbox to initialise
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Install a Chrome engine
         run: bun run cli.ts engine install stable
 
