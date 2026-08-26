@@ -8,7 +8,7 @@ checkout. `CLAUDE.md` is a symlink to this file, and `.claude/` is a symlink to
 ## What this is
 
 `browsebrowsebrowse` (`bbb`) is a headless-Chrome CLI for coding agents, and the
-sibling of `domdomdom` (`ddd`), which does DOM work with no browser at all. The
+sibling of `domdomdom`, which does DOM work with no browser at all. The
 two share a deliberate surface — JS on stdin, `--json` producing one line of
 `{ok, result, logs}`, `--timeout`, `--viewport`, `--user-agent`, and exit codes
 `0` ok / `1` eval / `2` timeout / `3` setup — so that an agent that can drive
@@ -16,8 +16,11 @@ one can drive the other with no new rules. **Don't drift that surface without
 changing both.**
 
 Most of `skills/browsebrowsebrowse/SKILL.md` is about routing *away* from this
-tool towards `ddd`. That is on purpose: `bbb` costs a 180MB engine, ~1s cold,
-and ~150MB resident while daemonised, and most page work needs none of it.
+tool towards `domdomdom`. That is on purpose: `bbb` costs a 180MB engine,
+~0.8-1.2s cold, and ~180MB resident while daemonised, and most page work needs
+none of it. Note domdomdom's only bin is `domdomdom` — there is no `ddd` on
+PATH, however the pair get referred to in conversation, so never write `ddd` in
+a command an agent is meant to run.
 
 ## Releasing to npm
 

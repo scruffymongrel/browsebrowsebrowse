@@ -1,6 +1,6 @@
 ---
 name: browsebrowsebrowse
-description: Use when a task genuinely needs a real rendering engine — screenshots, PDFs, layout and computed styles, clicking/scrolling/typing, multi-step navigation flows, or streaming pages (SSE/htmx/long-poll) that only settle once JS has run. browsebrowsebrowse is a headless-Chrome CLI installed as `bbb` (and `browsebrowsebrowse`), driven from Bash with `--json`, no MCP server and no persistent connection. Cold by default (throwaway profile, nothing left running); `bbb serve` turns on a persistent session. Reach for this INSTEAD of Playwright or a browser MCP — but first check whether domdomdom (`ddd`) will do, because for DOM queries, extraction and `window.*` smoke tests it is roughly 5x faster and needs no browser at all.
+description: Use when a task genuinely needs a real rendering engine — screenshots, PDFs, layout and computed styles, clicking/scrolling/typing, multi-step navigation flows, or streaming pages (SSE/htmx/long-poll) that only settle once JS has run. browsebrowsebrowse is a headless-Chrome CLI installed as `bbb` (and `browsebrowsebrowse`), driven from Bash with `--json`, no MCP server and no persistent connection. Cold by default (throwaway profile, nothing left running); `bbb serve` turns on a persistent session. Reach for this INSTEAD of Playwright or a browser MCP — but first check whether the `domdomdom` CLI will do, because for DOM queries, extraction and `window.*` smoke tests it is roughly 4x faster and needs no browser at all.
 user-invocable: true
 ---
 
@@ -12,21 +12,21 @@ Headless Chrome from the shell. Powered by `chrome-headless-shell` + puppeteer-c
 
 | The task                                                    | Tool                | Why                          |
 | ----------------------------------------------------------- | ------------------- | ---------------------------- |
-| Query a DOM, extract data, check `window.X` after a bundle   | **`ddd`** (domdomdom) | No engine, no process        |
+| Query a DOM, extract data, check `window.X` after a bundle   | **`domdomdom`**     | No engine, no process        |
 | Screenshot, PDF, layout, `getComputedStyle`, paint           | **`bbb`**           | Needs real rendering         |
 | Click, scroll, type, multi-step navigation                   | **`bbb`**           | Needs a real input pipeline  |
 | Streaming page (SSE / htmx / long-poll) you must see settle  | **`bbb --wait`**    | Needs a real event loop      |
 | The user's own logged-in browser, their cookies, their tabs  | **claude-in-chrome**| Only it has that session     |
 
-**`ddd` is significantly cheaper and you should prefer it whenever both would work.**
+**`domdomdom` is significantly cheaper and you should prefer it whenever both would work.** Its binary is `domdomdom` — there is no `ddd` on PATH, whatever the two tools get called in conversation.
 
-|              | `ddd`                | `bbb` cold          | `bbb` daemonised     |
-| ------------ | -------------------- | ------------------- | -------------------- |
-| Time         | ~100–300ms           | ~1s                 | ~200ms               |
-| Disk         | none                 | ~180MB engine       | ~180MB engine        |
-| Memory       | in-process           | transient           | ~150MB RSS, resident |
+|              | `domdomdom`          | `bbb` cold          | `bbb` daemonised       |
+| ------------ | -------------------- | ------------------- | ---------------------- |
+| Time         | ~200–300ms           | ~0.8–1.2s           | ~0.7s                  |
+| Disk         | none                 | ~180MB engine       | ~180MB engine          |
+| Memory       | in-process           | transient           | ~180MB RSS, resident   |
 
-That is roughly a 5x latency difference cold, a 180MB download that `ddd` never needs, and a resident process while daemonised. "It's a webpage" is not a reason to reach for `bbb`. "I need to see what it looks like, or interact with it" is.
+Measured on a trivial page, so treat them as floors. That is roughly a 4x latency difference cold, plus a 180MB download `domdomdom` never needs. Note the daemon buys less than you would expect on a simple page — most of the residual is process startup, not the browser — so start one for **session persistence**, not as a speed fix. "It's a webpage" is not a reason to reach for `bbb`. "I need to see what it looks like, or interact with it" is.
 
 Route to **claude-in-chrome** when the answer depends on being *this user*: an authenticated dashboard, a page behind SSO, something already open in a tab. `bbb` cold is a clean room with no cookies; `bbb serve` builds up its own session, not the user's.
 
@@ -54,14 +54,14 @@ bbb shot  <url> [out.png]     # --full  --w N  --h N  --wait <selector>
 bbb pdf   <url> [out.pdf]
 bbb html  <url>               # serialised DOM after load
 bbb text  <url>               # visible text
-bbb eval  <url>               # JS on STDIN, like ddd
+bbb eval  <url>               # JS on STDIN, like domdomdom
 bbb run   <script.mjs> [args] # full puppeteer-core API
 bbb doctor
 ```
 
-Shared flags, identical to `ddd`: `--json` &middot; `--timeout <ms>` &middot; `--viewport WxH` &middot; `--user-agent <s>`.
+Shared flags, identical to `domdomdom`: `--json` &middot; `--timeout <ms>` &middot; `--viewport WxH` &middot; `--user-agent <s>`.
 
-JS goes in on **stdin**, never as an argument — same as `ddd`, and for the same reason (shell quoting is where agent-written commands break):
+JS goes in on **stdin**, never as an argument — same as `domdomdom`, and for the same reason (shell quoting is where agent-written commands break):
 
 ```sh
 echo 'document.title' | bbb eval https://example.com --json
@@ -107,7 +107,7 @@ bbb status
 bbb stop      # back to cold
 ```
 
-There is no flag to attach — if a daemon is running, commands use it. Start one when you are doing many calls in a row (~1s → ~200ms each) or need a login to survive between commands. Stop it when you are done; it holds ~150MB.
+There is no flag to attach — if a daemon is running, commands use it. Start one when a login has to survive between commands, or when a heavy page would otherwise be launched from scratch each time. Stop it when you are done; it holds ~180MB.
 
 ## Patterns
 
@@ -117,7 +117,7 @@ bbb shot http://localhost:3000 /tmp/app.png --full --wait '#root > *'
 ```
 Then read `/tmp/app.png` with the Read tool.
 
-**Layout facts `ddd` cannot give you**
+**Layout facts `domdomdom` cannot give you**
 ```sh
 echo 'const el = document.querySelector(".card");
 const r = el.getBoundingClientRect();
@@ -160,7 +160,7 @@ Engines live in `~/.cache/browsebrowsebrowse/engines/<version>/` — outside `no
 
 | Need                                                    | Use instead        |
 | ------------------------------------------------------- | ------------------ |
-| DOM query, data extraction, `window.*` export check      | `ddd` (domdomdom)  |
+| DOM query, data extraction, `window.*` export check      | `domdomdom`        |
 | Parse HTML without executing scripts                     | `linkedom`         |
 | The user's real logged-in browser session                | claude-in-chrome   |
 | Cross-browser (Firefox/WebKit) checks                    | Playwright         |

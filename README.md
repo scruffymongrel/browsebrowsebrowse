@@ -9,19 +9,19 @@ echo 'getComputedStyle(document.querySelector(".card")).display' | bbb eval http
 
 Powered by [`chrome-headless-shell`](https://developer.chrome.com/blog/chrome-headless-shell) and [puppeteer-core](https://pptr.dev). No MCP server, no persistent connection, no framework — a CLI with `--json` output and honest exit codes, driven from a plain shell.
 
-It is the sibling of [domdomdom](https://github.com/scruffymongrel/domdomdom) (`ddd`), which does DOM work with **no browser at all**. Read the next section before installing this one.
+It is the sibling of [domdomdom](https://github.com/scruffymongrel/domdomdom), which does DOM work with **no browser at all**. Read the next section before installing this one.
 
 ## Which of the two do you want?
 
-`ddd` is roughly 5x faster, needs no 180MB engine and leaves no process running. **When both would work, use `ddd`.**
+`domdomdom` is roughly 4x faster, needs no 180MB engine and leaves no process running. **When both would work, use `domdomdom`.**
 
-|                                                        | `ddd` (domdomdom)   | `bbb` (this)                    |
+|                                                        | `domdomdom`         | `bbb` (this)                    |
 | ------------------------------------------------------ | ------------------- | ------------------------------- |
-| DOM queries, extraction, `window.*` smoke tests         | ✅ ~100–300ms       | works, but wasteful             |
+| DOM queries, extraction, `window.*` smoke tests         | ✅ ~200–300ms       | works, but wasteful             |
 | Screenshots, PDF, layout, `getComputedStyle`            | ❌ no rendering     | ✅                              |
 | Click, scroll, type, navigation flows                   | ❌                  | ✅                              |
 | Streaming pages you need to *see* settle                | ❌                  | ✅ (`--wait`)                   |
-| Cost                                                    | none                | ~180MB engine, ~1s cold / ~200ms warm, ~150MB RSS while daemonised |
+| Cost                                                    | none                | ~180MB engine, ~0.8–1.2s cold / ~0.7s daemonised, ~180MB RSS while daemonised |
 
 For anything that needs the user's own logged-in browser session — their cookies, their tabs — neither tool is right; use a browser extension such as claude-in-chrome.
 
@@ -81,7 +81,7 @@ bbb stop       # back to cold
 
 While a daemon is running, **every command uses it automatically**. There is no attach flag and no config file, because the failure mode of forgetting one — "why is it asking me to log in again?" — is exactly what the daemon exists to prevent.
 
-Start one when you are making many calls in a row (~1s → ~200ms each) or need a login to survive between commands. Stop it when you are done; it holds ~150MB.
+Start one when a login has to survive between commands, or when a heavy page would otherwise be launched from scratch each time. On a trivial page the daemon saves less than you might expect — most of the residual is process startup, not the browser. Stop it when you are done; it holds ~180MB.
 
 ## CLI
 
@@ -210,7 +210,7 @@ Thin on purpose — the CLI is the product. For anything richer, `bbb run` hands
 
 ## Agent integration
 
-`browsebrowsebrowse` was built for LLM agents to drive: `--json` plus stdin/stdout-only contracts mean it works behind a plain Bash tool with no MCP server, no persistent connection and no context overhead. The repo ships an [Agent Skill](https://agentskills.io/) at `skills/browsebrowsebrowse/SKILL.md` that teaches an agent **when a real browser is warranted** — most of that skill is about routing away to `ddd`.
+`browsebrowsebrowse` was built for LLM agents to drive: `--json` plus stdin/stdout-only contracts mean it works behind a plain Bash tool with no MCP server, no persistent connection and no context overhead. The repo ships an [Agent Skill](https://agentskills.io/) at `skills/browsebrowsebrowse/SKILL.md` that teaches an agent **when a real browser is warranted** — most of that skill is about routing away to `domdomdom`.
 
 ### Claude Code
 
