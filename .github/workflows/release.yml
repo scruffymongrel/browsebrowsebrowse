@@ -121,7 +121,7 @@ jobs:
       - name: Publish to npm
         run: npm publish --access public
 
-      # The Claude Code plugin channel. The marketplace pins `ref: release`, so
+      # The Claude Code plugin channel. The marketplace pins `ref: plugin`, so
       # advancing this branch is what ships the plugin.
       #
       # The branch is *built*, not fast-forwarded from main: a purpose-built tree
@@ -138,13 +138,13 @@ jobs:
       # field is Claude Code's update cache key, and it moves with a release.
       # The built commit is a child of the current channel tip, so this push is
       # an ordinary fast-forward and never needs --force.
-      - name: Build and advance the plugin release channel
+      - name: Build and advance the plugin channel
         run: |
           bun scripts/build-plugin-channel.mjs
-          git push origin release:release
+          git push origin plugin:plugin
 
       - name: Summary
         run: |
           echo "Published \`browsebrowsebrowse@${{ steps.bump.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "https://www.npmjs.com/package/browsebrowsebrowse/v/${{ steps.bump.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Plugin channel \`release\` advanced to \`v${{ steps.bump.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Plugin channel \`plugin\` advanced to \`v${{ steps.bump.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"

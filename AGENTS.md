@@ -56,8 +56,8 @@ Invariants — these are the ways to get it wrong:
   Claude Code uses to decide whether a plugin update is available. If it stops
   changing, `/plugin update` silently skips the plugin and users stay on an old
   build no matter what else moves.
-- **The `release` branch is the plugin channel, and it is *built*, not
-  fast-forwarded.** The marketplace repo pins `ref: release`, and after a
+- **The `plugin` branch is the plugin channel, and it is *built*, not
+  fast-forwarded.** The marketplace repo pins `ref: plugin`, and after a
   successful publish the workflow runs `scripts/build-plugin-channel.mjs` and
   pushes the result. Don't push to it by hand — that would ship plugin content
   for a version that isn't on npm.
@@ -68,7 +68,7 @@ Invariants — these are the ways to get it wrong:
   tip. A child, not a rewrite: the push stays an ordinary fast-forward, so
   nothing ever needs `--force`, and the channel keeps a linear history of its
   own. It shares no history with `main` — the commit body records the source
-  commit if you need to tie them together. If `release` doesn't exist (a fresh
+  commit if you need to tie them together. If `plugin` doesn't exist (a fresh
   fork), the first commit is an orphan.
 - **The plugin channel ships no `package.json` and no lockfile, deliberately.**
   Claude Code runs a dependency install in a plugin's root when it finds *both*
@@ -77,7 +77,7 @@ Invariants — these are the ways to get it wrong:
   `npm-shrinkwrap.json` → `npm ci --ignore-scripts`. With a `package.json` and
   no lockfile it is skipped, silently, with no log entry.
 
-  The old channel was `git push origin HEAD:release`, so it carried the whole
+  The old channel was `git push origin HEAD:plugin`, so it carried the whole
   dev tree including `bun.lock`, and every single plugin install materialised
   ~46-50MB of `node_modules`. Those deps exist so a plugin's hooks and MCP
   servers can load them. **This plugin ships skills only — no hooks, no MCP
@@ -93,7 +93,7 @@ Invariants — these are the ways to get it wrong:
   files it would add (`cli.ts`, `test/`, `scripts/`, tsconfigs, `AGENTS.md`) are
   read by nobody in the plugin cache and one of them costs 46MB per user.
 - **The plugin channel and the npm channel ship different content, on
-  purpose.** The plugin cache is a git clone of the built `release` branch:
+  purpose.** The plugin cache is a git clone of the built `plugin` branch:
   the manifest and the skill, and never a built binary — `dist/` is gitignored
   and isn't in the channel tree either way. The npm tarball is the mirror
   image: `files:` ships `dist/` (built at pack time via `prepack`) plus the
