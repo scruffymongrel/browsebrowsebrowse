@@ -47,6 +47,7 @@ Options:
   --engine-version <ver>    use a specific Chrome build for this run
   --no-install              never download an engine; fail with the command instead
   -h, --help                this text
+  -V, --version             print the package version and exit
 
 Output (default):
   result             -> stdout (strings verbatim; objects pretty-JSON)
