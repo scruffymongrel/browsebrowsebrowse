@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "browsebrowsebrowse",
+  "description": "Headless Chrome from the shell, for agents: screenshots, PDF, rendered HTML/text, page JS and full puppeteer scripts. Auto-loaded skill teaches Claude when a real browser is warranted and when the far cheaper domdomdom will do.",
+  "version": "0.0.0",
+  "author": {
+    "name": "scruffymongrel"
+  },
+  "homepage": "https://github.com/scruffymongrel/browsebrowsebrowse",
+  "repository": "https://github.com/scruffymongrel/browsebrowsebrowse",
+  "license": "MIT",
+  "keywords": [
+    "headless-chrome",
+    "chrome-headless-shell",
+    "puppeteer",
+    "screenshot",
+    "pdf",
+    "browser-automation",
+    "cdp"
+  ]
+}

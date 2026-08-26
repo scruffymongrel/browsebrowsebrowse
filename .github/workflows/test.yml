@@ -1,0 +1,56 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run quality
+
+  # The suite above runs under Bun only, but Node is the target runtime — the
+  # shipped bin's shebang is node. Without this, a Node-only break would only
+  # surface at release time, or for a user.
+  #
+  # Neither job installs a Chrome engine. Both are deliberately engine-free, so
+  # PR CI never spends 180MB and a minute of download on checks that are really
+  # about module resolution and packaging.
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - run: bun install --frozen-lockfile
+      - run: bun run smoke:node
+      # Installs the packed tarball and runs it the way users get it, which
+      # smoke:node can't — it runs the .ts from the checkout, where Node's type
+      # stripping is allowed and node_modules' isn't.
+      - run: bun run smoke:pack
+
+  # The browser-touching half. Separated because it downloads a ~180MB engine,
+  # so it is worth seeing fail on its own rather than as a slow flake inside the
+  # fast jobs.
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run cli.ts engine install stable
+      - run: bun run test:integration
