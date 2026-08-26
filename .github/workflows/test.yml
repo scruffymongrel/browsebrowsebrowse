@@ -52,5 +52,18 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
+      # Ubuntu 23.10+ (so every current runner) blocks unprivileged user
+      # namespaces via AppArmor, and Chrome's sandbox needs them: without this
+      # every launch dies with "No usable sandbox!".
+      #
+      # Re-enabling the namespaces is deliberate, in preference to the obvious
+      # fix of passing --no-sandbox. bbb points a real browser at untrusted
+      # pages, and the renderer sandbox is the main thing between a hostile page
+      # and the host — so it stays on, and CI tests the same configuration real
+      # users run. src/daemon.ts drops the sandbox only for uid 0, where Chrome
+      # cannot use it at all; that path must not widen to "on CI" for
+      # convenience.
+      - name: Allow Chrome's sandbox to initialise
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: bun run cli.ts engine install stable
       - run: bun run test:integration
