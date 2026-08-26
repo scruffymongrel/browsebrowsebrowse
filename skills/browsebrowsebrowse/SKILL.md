@@ -62,6 +62,15 @@ One gap worth knowing: on a **Bun-only machine with no Node on `PATH`**, a globa
 
 Check with `bbb doctor`. On first use `bbb` needs a Chrome engine (~180MB, one-time, shared across all projects): at a terminal it installs one after printing a notice; anywhere non-interactive it exits 3 and prints `bbb engine install stable`. It **never** downloads unprompted in CI.
 
+### Version drift (plugin vs CLI)
+
+This ships as two independent installs: the plugin (this skill, via `/plugin`) and the CLI (the `bbb`/`browsebrowsebrowse` binary, via npm). They can drift.
+
+- Skill mentions a flag/verb `bbb --help` doesn't have -> CLI is behind. Fix: `npm i -g browsebrowsebrowse@latest` (or `bun add -g`, or prefix any command with `bunx browsebrowsebrowse`/`npx --yes browsebrowsebrowse` to run latest with no install).
+- `bbb --help`/`bbb doctor` shows something this skill never mentions -> plugin is behind. Fix: `/plugin update`.
+
+Compare versions directly with `bbb --version` (or `bbb doctor`'s JSON `version` field) against the plugin's version — see README for the full explanation.
+
 ## Invocation
 
 ```sh

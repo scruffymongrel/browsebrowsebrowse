@@ -236,6 +236,21 @@ Thin on purpose — the CLI is the product. For anything richer, `bbb run` hands
 
 Restart Claude Code. **The plugin does not put `bbb` on `PATH`** — it ships the skill, not the binary — so install the CLI separately with `npm i -g browsebrowsebrowse`. The skill says so too.
 
+### Keeping the plugin and CLI in sync
+
+browsebrowsebrowse installs as two separate artifacts from one repo at one version: this plugin, which ships the skill only (from the `scruffymongrel` marketplace, pinned to the `release` branch — see AGENTS.md for the channel-split invariant), and the npm package, which ships the `bbb`/`browsebrowsebrowse` binaries. They install and upgrade independently, so they can drift.
+
+**Upgrade both, as a pair:**
+
+- **Plugin** — `/plugin update` in Claude Code (opens the plugin manager; pick `browsebrowsebrowse@scruffymongrel` from the Installed tab), or `claude plugin update browsebrowsebrowse@scruffymongrel` from the shell. Run `/reload-plugins` (or restart) to pick it up in the current session.
+- **CLI** — `npm i -g browsebrowsebrowse@latest` / `bun add -g browsebrowsebrowse@latest` / `deno install -g -A npm:browsebrowsebrowse@latest`, reinstalling over the existing global link.
+
+**Which one is stale?** `bbb --version` (or `bbb doctor`'s JSON `version` field) reports the installed CLI's version directly; compare it against the plugin's version, visible from `/plugin`'s Installed tab. The same behavioral check catches it too: if this skill describes a flag or verb `bbb --help` doesn't list, the CLI is behind — upgrade it from npm. If `bbb --help`/`bbb doctor` shows something this doc never mentions, the plugin is behind — update it through `/plugin`.
+
+**One direction only.** The release workflow advances the `release` branch — the plugin channel — only *after* `npm publish` succeeds (see "Releasing" below and AGENTS.md). So npm is never behind the plugin; only the reverse can happen, and only because a user hasn't updated the plugin on their machine yet.
+
+**Quick fix:** `bunx browsebrowsebrowse`, `npx --yes browsebrowsebrowse`, and `deno run -A npm:browsebrowsebrowse` always fetch latest by default, sidestepping CLI staleness entirely — reach for one of these when you're not sure which side has drifted.
+
 ### Other agents (Cursor, Aider, Codex CLI, Copilot, …)
 
 The skill follows the [Agent Skills open standard](https://agentskills.io/specification) — `SKILL.md` with YAML frontmatter. After installing, it lives at `$(npm root -g)/browsebrowsebrowse/skills/browsebrowsebrowse/`:
