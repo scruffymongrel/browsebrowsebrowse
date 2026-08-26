@@ -1,4 +1,0 @@
-[test]
-# Integration tests drive a real Chrome. They are deliberately outside the
-# coverage gate: see the comment in bunfig.toml.
-coverage = false
