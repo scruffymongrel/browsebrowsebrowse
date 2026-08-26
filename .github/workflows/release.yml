@@ -124,14 +124,24 @@ jobs:
       # The Claude Code plugin channel. The marketplace pins `ref: release`, so
       # advancing this branch is what ships the plugin.
       #
+      # The branch is *built*, not fast-forwarded from main: a purpose-built tree
+      # of .claude-plugin/, skills/, README.md and LICENSE, with no package.json
+      # and no lockfile. Claude Code runs a dependency install in any plugin root
+      # holding both, which cost every user ~46-50MB of node_modules that a
+      # skills-only plugin can never load. See scripts/build-plugin-channel.mjs.
+      #
       # Deliberately after npm publish, so the plugin never points at a version
       # that isn't on npm — the skill tells agents to install the CLI from npm,
       # so plugin content must describe the *released* version.
       #
       # Consumers only see an update when plugin.json's version changes; that
       # field is Claude Code's update cache key, and it moves with a release.
-      - name: Advance the plugin release channel
-        run: git push origin HEAD:release
+      # The built commit is a child of the current channel tip, so this push is
+      # an ordinary fast-forward and never needs --force.
+      - name: Build and advance the plugin release channel
+        run: |
+          bun scripts/build-plugin-channel.mjs
+          git push origin release:release
 
       - name: Summary
         run: |

@@ -32,7 +32,7 @@ Route to **claude-in-chrome** when the answer depends on being *this user*: an a
 
 ## Install (the plugin does NOT put `bbb` on PATH)
 
-Installing this plugin ships the skill, not the binary — the plugin cache is a git clone with `dist/` gitignored, so there is nothing runnable in it. Install the CLI separately:
+Installing this plugin ships the skill, not the binary — the plugin cache holds this skill and the plugin manifest and nothing else, so there is nothing runnable in it. Install the CLI separately:
 
 ```sh
 npm install -g browsebrowsebrowse    # or: bun add -g browsebrowsebrowse
