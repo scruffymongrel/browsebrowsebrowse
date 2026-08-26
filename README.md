@@ -238,7 +238,7 @@ Restart Claude Code. **The plugin does not put `bbb` on `PATH`** — it ships th
 
 ### Keeping the plugin and CLI in sync
 
-browsebrowsebrowse installs as two separate artifacts from one repo at one version: this plugin, which ships the skill only (from the `scruffymongrel` marketplace, pinned to the `release` branch — see AGENTS.md for the channel-split invariant), and the npm package, which ships the `bbb`/`browsebrowsebrowse` binaries. They install and upgrade independently, so they can drift.
+browsebrowsebrowse installs as two separate artifacts from one repo at one version: this plugin, which ships the skill only (from the `scruffymongrel` marketplace, pinned to the `plugin` branch — see AGENTS.md for the channel-split invariant), and the npm package, which ships the `bbb`/`browsebrowsebrowse` binaries. They install and upgrade independently, so they can drift.
 
 **Upgrade both, as a pair:**
 
@@ -247,7 +247,7 @@ browsebrowsebrowse installs as two separate artifacts from one repo at one versi
 
 **Which one is stale?** `bbb --version` (or `bbb doctor`'s JSON `version` field) reports the installed CLI's version directly; compare it against the plugin's version, visible from `/plugin`'s Installed tab. The same behavioral check catches it too: if this skill describes a flag or verb `bbb --help` doesn't list, the CLI is behind — upgrade it from npm. If `bbb --help`/`bbb doctor` shows something this doc never mentions, the plugin is behind — update it through `/plugin`.
 
-**One direction only.** The release workflow advances the `release` branch — the plugin channel — only *after* `npm publish` succeeds (see "Releasing" below and AGENTS.md). So npm is never behind the plugin; only the reverse can happen, and only because a user hasn't updated the plugin on their machine yet.
+**One direction only.** The release workflow advances the `plugin` branch — the plugin channel — only *after* `npm publish` succeeds (see "Releasing" below and AGENTS.md). So npm is never behind the plugin; only the reverse can happen, and only because a user hasn't updated the plugin on their machine yet.
 
 **Quick fix:** `bunx browsebrowsebrowse`, `npx --yes browsebrowsebrowse`, and `deno run -A npm:browsebrowsebrowse` always fetch latest by default, sidestepping CLI staleness entirely — reach for one of these when you're not sure which side has drifted.
 
@@ -294,7 +294,7 @@ gh workflow run release.yml -f bump=patch|minor|major
 
 CI runs the quality gate, the Node smoke test, the packed-tarball smoke test and the integration suite, then bumps the version, commits, tags, pushes and publishes to npm via [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) with provenance. It refuses to run anywhere but `main`. `release.yml` and `test.yml` gate on the same checks on purpose — they drifted once and a release broke on a step PR CI had never run.
 
-The same run builds the `release` branch, which is the Claude Code plugin channel. It isn't a copy of `main`: `scripts/build-plugin-channel.mjs` commits a tree of exactly `.claude-plugin/`, `skills/`, `README.md` and `LICENSE`, with no `package.json` and no lockfile — Claude Code installs dependencies into any plugin root that has both, and a skills-only plugin has no hooks or MCP servers that could ever load them.
+The same run builds the `plugin` branch, which is the Claude Code plugin channel. It isn't a copy of `main`: `scripts/build-plugin-channel.mjs` commits a tree of exactly `.claude-plugin/`, `skills/`, `README.md` and `LICENSE`, with no `package.json` and no lockfile — Claude Code installs dependencies into any plugin root that has both, and a skills-only plugin has no hooks or MCP servers that could ever load them.
 
 Don't bump `version` in `package.json` by hand — CI owns it, and a manual bump double-bumps. Don't rename `.github/workflows/release.yml` either; npm's trusted publisher is keyed to the repo *and* the workflow filename. See `AGENTS.md` for the full set of release invariants.
 
