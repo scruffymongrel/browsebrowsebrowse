@@ -10,10 +10,15 @@ checkout. `CLAUDE.md` is a symlink to this file, and `.claude/` is a symlink to
 `browsebrowsebrowse` (`bbb`) is a headless-Chrome CLI for coding agents, and the
 sibling of `domdomdom`, which does DOM work with no browser at all. The
 two share a deliberate surface — JS on stdin, `--json` producing one line of
-`{ok, result, logs}`, `--timeout`, `--viewport`, `--user-agent`, and exit codes
-`0` ok / `1` eval / `2` timeout / `3` setup — so that an agent that can drive
-one can drive the other with no new rules. **Don't drift that surface without
-changing both.**
+`{ok, result, logs, status}`, `--timeout`, `--viewport`, `--user-agent`,
+`--fail`, and exit codes `0` ok / `1` eval / `2` timeout / `3` setup / `4` http
+— so that an agent that can drive one can drive the other with no new rules.
+**Don't drift that surface without changing both.**
+
+`src/pure/http.ts` is duplicated verbatim as exports of domdomdom's `index.ts`
+(`isHttpFailure`, `httpErrorMessage`). A shared package between the two repos
+would be a third thing to version for two functions; the duplication is the
+cheaper trade, but it only works if you change both.
 
 Most of `skills/browsebrowsebrowse/SKILL.md` is about routing *away* from this
 tool towards `domdomdom`. That is on purpose: `bbb` costs a 180MB engine,
@@ -209,6 +214,24 @@ bun run build             # compile dist/ (runs automatically via prepack)
   a page holding six connections open has exhausted Chrome's per-host socket
   pool, so the second navigation can't get a socket and times out too. One
   navigation, then a *separate* `waitForNetworkIdle` that is allowed to fail.
+- **No TypeScript parameter properties.** `constructor(readonly status: number)`
+  compiles under tsc and runs under Bun, and Node refuses it outright —
+  `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`, because Node's type stripping is
+  erasure-only and a parameter property *emits* code. `HttpError` was written
+  that way and `smoke:node` caught it on the first run; `quality` had been
+  green. Assign the field in the body. This is why `smoke:node` runs the `.ts`
+  from the checkout rather than `dist/`.
+- **Chrome invents a `200` for `file:` and `data:` URLs.** `response.status()`
+  is `200` and `ok()` is `true` for a local HTML file — measured, not assumed.
+  `statusFromResponse()` nulls anything that isn't `http(s):` for that reason:
+  `status` answers "what did the server say", and `--fail` must not pass
+  judgement on something no server ever saw. `page.goto()` also returns `null`
+  outright for a navigation that issues no request (`about:blank`, a
+  same-document hash change), which is the other way to get `null`.
+- **`goto()` returns `{ strategy, status }`, and `bbb run` hands that object to
+  the script.** It used to return the strategy string alone. If you add a third
+  thing a navigation produces, it goes in this object rather than a second
+  return channel — the `run` API is public.
 - **`page.evaluate(string)` evaluates an expression, not a function.** Handing
   it `() => (...)` serialises the function itself and the caller gets `{}`.
   `wrapForReturn()` produces an async IIFE expression for that reason.

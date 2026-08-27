@@ -3,9 +3,9 @@
  * domdomdom's so that an agent that can drive `ddd` can drive `bbb` with no new
  * parsing rules:
  *
- *   --json  -> one line of {ok, result, logs} on stdout, nothing else
+ *   --json  -> one line of {ok, result, logs, status} on stdout, nothing else
  *   default -> human text on stdout, console.* on stderr
- *   exit     0 ok | 1 eval error | 2 timeout | 3 setup/usage
+ *   exit     0 ok | 1 eval error | 2 timeout | 3 setup/usage | 4 http
  *
  * `--json` is optional in both tools. A CLI whose plain output is unreadable
  * teaches people to reach for something else.
@@ -18,17 +18,26 @@ export interface LogEntry {
   message: string
 }
 
-export type ErrorKind = 'eval' | 'timeout' | 'setup'
+export type ErrorKind = 'eval' | 'timeout' | 'setup' | 'http'
 
 export interface CommandError {
   kind: ErrorKind
   message: string
   stack?: string
+  /** Present on `kind: 'http'`. */
+  status?: number
 }
 
+/**
+ * `status` is the main document's final HTTP status after redirects, and `null`
+ * for anything that never made an HTTP request — a `file:` or `data:` URL,
+ * `about:blank`, or a verb that never navigates at all (`serve`, `doctor`,
+ * `engine …`). Always present rather than conditionally omitted: one shape is
+ * easier to parse than two.
+ */
 export type CommandResult =
-  | { ok: true; result: unknown; logs: LogEntry[] }
-  | { ok: false; error: CommandError; logs: LogEntry[] }
+  | { ok: true; result: unknown; logs: LogEntry[]; status: number | null }
+  | { ok: false; error: CommandError; logs: LogEntry[]; status: number | null }
 
 export interface Rendered {
   stdout: string
@@ -36,12 +45,12 @@ export interface Rendered {
   code: number
 }
 
-export function ok(result: unknown, logs: LogEntry[] = []): CommandResult {
-  return { ok: true, result, logs }
+export function ok(result: unknown, logs: LogEntry[] = [], status: number | null = null): CommandResult {
+  return { ok: true, result, logs, status }
 }
 
-export function fail(error: unknown, logs: LogEntry[] = []): CommandResult {
-  return { ok: false, error: classify(error), logs }
+export function fail(error: unknown, logs: LogEntry[] = [], status: number | null = null): CommandResult {
+  return { ok: false, error: classify(error), logs, status }
 }
 
 /**
@@ -55,24 +64,39 @@ export function classify(error: unknown): CommandError {
   const kindOf = (error as { kind?: unknown } | null)?.kind
   const name = (error as { name?: unknown } | null)?.name
   const kind: ErrorKind =
-    kindOf === 'setup' || kindOf === 'timeout' || kindOf === 'eval'
+    kindOf === 'setup' || kindOf === 'timeout' || kindOf === 'eval' || kindOf === 'http'
       ? kindOf
       : name === 'TimeoutError'
         ? 'timeout'
         : 'eval'
 
-  if (error instanceof Error) {
-    const out: CommandError = { kind, message: error.message }
-    if (error.stack) out.stack = error.stack
+  const status = (error as { status?: unknown } | null)?.status
+  const withStatus = (out: CommandError): CommandError => {
+    if (kind === 'http' && typeof status === 'number') out.status = status
     return out
   }
-  return { kind, message: String(error) }
+
+  if (error instanceof Error) {
+    const out: CommandError = { kind, message: error.message }
+    // No stack on an `http` error: it would be *our* call stack, which tells
+    // the reader nothing the status and URL haven't already, and domdomdom's
+    // `http` error carries none either.
+    if (error.stack && kind !== 'http') out.stack = error.stack
+    return withStatus(out)
+  }
+  return withStatus({ kind, message: String(error) })
 }
 
+/**
+ * The exit-code contract, in one place. Mirrored exactly by domdomdom's
+ * `exitCodeFor()`; each code stays diagnostic, so a new failure mode gets a new
+ * number rather than borrowing one.
+ */
 export function exitCodeFor(result: CommandResult): number {
   if (result.ok) return 0
   if (result.error.kind === 'timeout') return 2
   if (result.error.kind === 'setup') return 3
+  if (result.error.kind === 'http') return 4
   return 1
 }
 
@@ -105,8 +129,8 @@ export function toCloneable(value: unknown, seen: WeakSet<object> = new WeakSet(
 
 export function renderJson(result: CommandResult): Rendered {
   const payload = result.ok
-    ? { ok: true, result: toCloneable(result.result), logs: result.logs }
-    : { ok: false, error: result.error, logs: result.logs }
+    ? { ok: true, result: toCloneable(result.result), logs: result.logs, status: result.status }
+    : { ok: false, error: result.error, logs: result.logs, status: result.status }
   return { stdout: JSON.stringify(payload) + '\n', stderr: '', code: exitCodeFor(result) }
 }
 
@@ -115,7 +139,14 @@ export function renderHuman(result: CommandResult): Rendered {
 
   if (!result.ok) {
     const { kind, message, stack } = result.error
-    const label = kind === 'timeout' ? 'TIMEOUT' : kind === 'setup' ? 'SETUP ERROR' : 'EVAL ERROR'
+    const label =
+      kind === 'timeout'
+        ? 'TIMEOUT'
+        : kind === 'setup'
+          ? 'SETUP ERROR'
+          : kind === 'http'
+            ? 'HTTP ERROR'
+            : 'EVAL ERROR'
     stderr += `${label}: ${kind === 'eval' ? (stack ?? message) : message}\n`
     return { stdout: '', stderr, code: exitCodeFor(result) }
   }

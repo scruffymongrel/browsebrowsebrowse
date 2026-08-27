@@ -14,6 +14,7 @@ import type { Config } from './config.ts'
 import { daemonAlive, effectivePort, endpointFor, extraChromeArgs, isHeadlessShell } from './daemon.ts'
 import { ensureEngine, type ResolvedEngine } from './engine.ts'
 import type { Viewport } from './pure/args.ts'
+import { statusFromResponse } from './pure/http.ts'
 import type { LogEntry, LogLevel } from './pure/output.ts'
 
 /**
@@ -124,6 +125,15 @@ export async function withSession<T>(
 
 export type NavigationStrategy = 'wait-selector' | 'networkidle2' | 'domcontentloaded'
 
+/**
+ * What one navigation produced: how it settled, and the main document's final
+ * HTTP status (null when there wasn't one — see `statusFromResponse`).
+ */
+export interface Navigation {
+  strategy: NavigationStrategy
+  status: number | null
+}
+
 /** networkidle2, spelled out: at most two connections open, quiet for 500ms. */
 const IDLE_CONCURRENCY = 2
 const IDLE_TIME = 500
@@ -146,20 +156,26 @@ const IDLE_TIME = 500
  *
  * A `domcontentloaded` that times out is a real failure and propagates, which
  * the CLI reports as exit 2.
+ *
+ * The navigation's own response is the only honest source of the status — it is
+ * the main document's, after redirects, and reading it costs nothing extra. A
+ * second request to "check" the URL would be a different request and could get
+ * a different answer.
  */
 export async function goto(
   page: Page,
   url: string,
   opts: { wait?: string | undefined; timeout: number },
-): Promise<NavigationStrategy> {
+): Promise<Navigation> {
   const started = Date.now()
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: opts.timeout })
+  const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: opts.timeout })
+  const status = statusFromResponse(response)
   const remaining = () => Math.max(IDLE_TIME, opts.timeout - (Date.now() - started))
 
   // A named selector is both faster and a real assertion about what rendered.
   if (opts.wait) {
     await page.waitForSelector(opts.wait, { timeout: remaining() })
-    return 'wait-selector'
+    return { strategy: 'wait-selector', status }
   }
 
   try {
@@ -168,11 +184,11 @@ export async function goto(
       concurrency: IDLE_CONCURRENCY,
       timeout: remaining(),
     })
-    return 'networkidle2'
+    return { strategy: 'networkidle2', status }
   } catch (error) {
     if (!isTimeout(error)) throw error
     // It is streaming. Give late-rendering JS a moment, then take what we have.
     await new Promise(resolve => setTimeout(resolve, SETTLE_MS))
-    return 'domcontentloaded'
+    return { strategy: 'domcontentloaded', status }
   }
 }

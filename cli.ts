@@ -37,12 +37,13 @@ Cold vs daemon:
   on every command uses it automatically. cold = clean room, daemon = session.
 
 Options:
-  --json                    one line of { ok, result, logs } on stdout
+  --json                    one line of { ok, result, logs, status } on stdout
   --timeout <ms>            navigation/selector budget (default 30000)
   --viewport <WxH>          page viewport (default 1440x900)
   --w <n> / --h <n>         viewport width/height; beat --viewport
   --full                    full-page screenshot (shot)
   --wait <selector>         wait for a selector instead of network idle
+  --fail                    treat a non-2xx page as an error (like curl --fail)
   --user-agent <ua>         override navigator.userAgent
   --engine-version <ver>    use a specific Chrome build for this run
   --no-install              never download an engine; fail with the command instead
@@ -52,11 +53,17 @@ Options:
 Output (default):
   result             -> stdout (strings verbatim; objects pretty-JSON)
   page console.*     -> stderr, prefixed [log]/[warn]/[error]/[info]/[debug]
-  errors             -> stderr (TIMEOUT / SETUP ERROR / EVAL ERROR)
+  errors             -> stderr (TIMEOUT / SETUP ERROR / EVAL ERROR / HTTP ERROR)
 
-Exit codes: 0 ok | 1 eval error | 2 timeout | 3 setup/usage error
+Exit codes: 0 ok | 1 eval error | 2 timeout | 3 setup/usage error | 4 HTTP error
 
-Streaming pages (SSE, htmx, long-poll) never go network-idle. Use --wait <sel>.
+HTTP status:
+  --json always carries "status": the main document's final status after
+  redirects, or null for file:/data:/about:blank. WITHOUT --fail a 404 still
+  exits 0 with ok:true — check "status", not the exit code.
+
+Streaming pages (SSE, htmx, long-poll) go network-idle before the stream opens,
+so the eval runs too early and returns nothing, fast. Use --wait <sel>.
 
 env: CHROME_PATH (override the engine)  BBB_PORT  BBB_CACHE_DIR
      BBB_ENGINE_VERSION  BBB_NO_INSTALL  BBB_CHROME_ARGS

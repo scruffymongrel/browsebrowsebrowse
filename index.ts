@@ -35,6 +35,7 @@ export {
   goto,
   withSession,
   SETTLE_MS,
+  type Navigation,
   type NavigationStrategy,
   type Session,
   type SessionMode,
@@ -42,13 +43,16 @@ export {
 } from './src/session.ts'
 
 export { normaliseUrl } from './src/pure/url.ts'
-export { SetupError, BrowseTimeoutError, UsageError } from './src/pure/errors.ts'
+export { SetupError, BrowseTimeoutError, HttpError, UsageError } from './src/pure/errors.ts'
+export { httpErrorMessage, isHttpFailure, statusFromResponse } from './src/pure/http.ts'
 export {
   classify,
   exitCodeFor,
   render,
   toCloneable,
+  type CommandError,
   type CommandResult,
+  type ErrorKind,
   type LogEntry,
   type LogLevel,
 } from './src/pure/output.ts'

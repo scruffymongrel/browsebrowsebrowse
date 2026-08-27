@@ -47,7 +47,7 @@ const VALUE_FLAGS = new Set([
   'port',
 ])
 
-const BOOL_FLAGS = new Set(['full', 'json', 'help', 'no-install'])
+const BOOL_FLAGS = new Set(['full', 'json', 'help', 'no-install', 'fail'])
 
 const SHORT: Record<string, string> = { h: 'help' }
 
@@ -127,6 +127,8 @@ export interface CliArgs {
   args: string[]
   json: boolean
   full: boolean
+  /** `curl --fail`: a non-2xx main document is an error, not a page. */
+  fail: boolean
   wait?: string
   timeout: number
   viewport: Viewport
@@ -242,6 +244,7 @@ function defaults(options: Map<string, string | true>, help: boolean): Omit<CliA
   const out: Omit<CliArgs, 'verb' | 'args'> = {
     json: options.get('json') === true,
     full: options.get('full') === true,
+    fail: options.get('fail') === true,
     timeout: timeoutRaw === undefined ? DEFAULT_TIMEOUT : positiveInt(timeoutRaw, 'timeout'),
     viewport: resolveViewport(options),
     noInstall: options.get('no-install') === true,

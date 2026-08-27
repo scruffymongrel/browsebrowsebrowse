@@ -94,7 +94,7 @@ describe('renderJson', () => {
     const r = renderJson(ok({ title: 'x' }, LOGS))
     expect(r.stdout.endsWith('\n')).toBe(true)
     expect(r.stdout.trimEnd().includes('\n')).toBe(false)
-    expect(JSON.parse(r.stdout)).toEqual({ ok: true, result: { title: 'x' }, logs: LOGS })
+    expect(JSON.parse(r.stdout)).toEqual({ ok: true, result: { title: 'x' }, logs: LOGS, status: null })
     expect(r.stderr).toBe('')
     expect(r.code).toBe(0)
   })
@@ -144,6 +144,6 @@ describe('renderHuman', () => {
 })
 
 test('render picks the shape from the --json flag', () => {
-  expect(render(ok('x'), true).stdout).toBe('{"ok":true,"result":"x","logs":[]}\n')
+  expect(render(ok('x'), true).stdout).toBe('{"ok":true,"result":"x","logs":[],"status":null}\n')
   expect(render(ok('x'), false).stdout).toBe('x\n')
 })

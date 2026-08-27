@@ -29,8 +29,9 @@ import {
   readManifest,
   resolve as resolveEngineNow,
 } from './engine.ts'
-import { SetupError, UsageError } from './pure/errors.ts'
-import { ok, type CommandResult, type LogEntry } from './pure/output.ts'
+import { HttpError, SetupError, UsageError } from './pure/errors.ts'
+import { httpErrorMessage, isHttpFailure } from './pure/http.ts'
+import { fail, ok, type CommandResult, type LogEntry } from './pure/output.ts'
 import { normaliseUrl } from './pure/url.ts'
 import { goto, withSession, type SessionOptions } from './session.ts'
 
@@ -62,18 +63,38 @@ function outputPath(ctx: CommandContext, fallback: string): string {
   return resolvePath(ctx.cwd, ctx.args.args[1] ?? fallback)
 }
 
-/** Every page verb shares this shape: navigate, then produce one value. */
+/**
+ * Every page verb shares this shape: navigate, then produce one value.
+ *
+ * Failure comes back as a result rather than a throw so that `status` and the
+ * page's `logs` survive onto it — a 404 with the site's console output attached
+ * says more than a bare error. A usage error still throws: it happens before
+ * any of that exists.
+ */
 async function onPage<T>(
   ctx: CommandContext,
   verb: string,
   fn: (page: Page, url: string) => Promise<T>,
 ): Promise<CommandResult> {
   const url = requireUrl(ctx, verb)
-  const { value, logs } = await withSession(ctx.cfg, sessionOptions(ctx.args), async session => {
-    await goto(session.page, url, { wait: ctx.args.wait, timeout: ctx.args.timeout })
-    return fn(session.page, url)
-  })
-  return ok(value, logs)
+  let status: number | null = null
+  let logs: LogEntry[] = []
+  try {
+    const outcome = await withSession(ctx.cfg, sessionOptions(ctx.args), async session => {
+      logs = session.logs
+      const nav = await goto(session.page, url, { wait: ctx.args.wait, timeout: ctx.args.timeout })
+      status = nav.status
+      // Fail fast: with --fail a bad status IS the answer, so the user's code
+      // never runs and no screenshot is taken.
+      if (ctx.args.fail && isHttpFailure(status)) {
+        throw new HttpError(status as number, httpErrorMessage(status as number, url))
+      }
+      return fn(session.page, url)
+    })
+    return ok(outcome.value, outcome.logs, status)
+  } catch (error) {
+    return fail(error, logs, status)
+  }
 }
 
 export async function shot(ctx: CommandContext): Promise<CommandResult> {
@@ -183,20 +204,30 @@ export async function run(ctx: CommandContext): Promise<CommandResult> {
   }
 
   const scriptArgs = ctx.args.args.slice(1)
+  // A script can navigate many times; the reported status is the last one's,
+  // which is the document whose result the script returned.
+  let status: number | null = null
   const { value, logs } = await withSession(ctx.cfg, sessionOptions(ctx.args), async session =>
     (fn as (api: unknown) => Promise<unknown>)({
       browser: session.browser,
       page: session.page,
       args: scriptArgs,
-      goto: (u: string) =>
-        goto(session.page, normaliseUrl(u, ctx.cwd), {
+      goto: async (u: string) => {
+        const target = normaliseUrl(u, ctx.cwd)
+        const nav = await goto(session.page, target, {
           wait: ctx.args.wait,
           timeout: ctx.args.timeout,
-        }),
+        })
+        status = nav.status
+        if (ctx.args.fail && isHttpFailure(status)) {
+          throw new HttpError(status as number, httpErrorMessage(status as number, target))
+        }
+        return nav
+      },
       puppeteer,
     }),
   )
-  return ok(value, logs)
+  return ok(value, logs, status)
 }
 
 export async function serve(ctx: CommandContext): Promise<CommandResult> {

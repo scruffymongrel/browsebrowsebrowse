@@ -25,7 +25,7 @@ it('goto strategy', () => {
   test('an ordinary page reaches network idle', async () => {
     const cfg = loadConfig(sc.env)
     const { value } = await withSession(cfg, opts, ({ page }) => goto(page, fx.url('/'), { timeout: 10_000 }))
-    expect(value).toBe('networkidle2')
+    expect(value.strategy).toBe('networkidle2')
   }, 30_000)
 
   // The bug this prevents: networkidle2 never fires on a streaming page, so a
@@ -35,7 +35,7 @@ it('goto strategy', () => {
     const { value } = await withSession(cfg, { ...opts, timeout: 2000 }, ({ page }) =>
       goto(page, fx.url('/stream'), { timeout: 2000 }),
     )
-    expect(value).toBe('domcontentloaded')
+    expect(value.strategy).toBe('domcontentloaded')
   }, 30_000)
 
   // Naming a selector skips network idle entirely: faster, and a real
@@ -45,7 +45,7 @@ it('goto strategy', () => {
     const { value } = await withSession(cfg, opts, ({ page }) =>
       goto(page, fx.url('/stream'), { wait: '[data-done]', timeout: 10_000 }),
     )
-    expect(value).toBe('wait-selector')
+    expect(value.strategy).toBe('wait-selector')
   }, 30_000)
 
   test('a selector that never appears times out, which the CLI maps to exit 2', async () => {
