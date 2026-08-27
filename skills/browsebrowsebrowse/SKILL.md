@@ -83,7 +83,7 @@ bbb run   <script.mjs> [args] # full puppeteer-core API
 bbb doctor
 ```
 
-Shared flags, identical to `domdomdom`: `--json` &middot; `--timeout <ms>` &middot; `--viewport WxH` &middot; `--user-agent <s>`.
+Shared flags, identical to `domdomdom`: `--json` &middot; `--timeout <ms>` &middot; `--viewport WxH` &middot; `--user-agent <s>` &middot; `--fail` (non-2xx is an error, exit 4). `bbb`-only: `--wait <selector>` &middot; `--full` &middot; `--w`/`--h` &middot; `--engine-version` &middot; `--no-install`.
 
 JS goes in on **stdin**, never as an argument — same as `domdomdom`, and for the same reason (shell quoting is where agent-written commands break):
 
@@ -98,26 +98,56 @@ Single-line expressions auto-return. Multi-line code: write `return` yourself. `
 Human by default; `--json` gives one line. Branch on `.ok`.
 
 ```json
-{ "ok": true,  "result": <any>, "logs": [{"level":"log"|"warn"|"error"|"info"|"debug","message":"..."}] }
-{ "ok": false, "error": { "kind": "eval"|"timeout"|"setup", "message": "...", "stack": "..." }, "logs": [] }
+{ "ok": true,  "result": <any>, "logs": [{"level":"log"|"warn"|"error"|"info"|"debug","message":"..."}], "status": <number|null> }
+{ "ok": false, "error": { "kind": "eval"|"timeout"|"setup"|"http", "message": "...", "stack": "..." }, "logs": [], "status": <number|null> }
 ```
 
-Exit codes: `0` ok &middot; `1` eval error &middot; `2` timeout &middot; `3` setup/usage. Use the exit code as a cheap pre-check before parsing.
+Exit codes: `0` ok &middot; `1` eval error &middot; `2` timeout &middot; `3` setup/usage &middot; `4` HTTP error (`--fail` only).
 
 Without `--json`: the result goes to stdout (strings verbatim, so `bbb html url > page.html` works), page `console.*` to stderr as `[log]`/`[warn]`/…, errors to stderr.
 
-## The gotcha that will bite you: streaming pages
+### HTTP status is NOT in the exit code
 
-`bbb` waits for `networkidle2` by default, which is right for an ordinary page and **wrong for anything streaming**. An SSE connection, an open WebSocket or an htmx long-poll means the network never goes quiet, so the wait burns the whole `--timeout` on a page that rendered fine a second in.
+`status` is the main document's **final** status after redirects, and `null` when there wasn't one — a local file, a `data:` URL, `about:blank`, or a verb that never navigates. The key is always present.
 
-**Use `--wait <selector>`** — it skips network-idle entirely, waits for `domcontentloaded`, then waits for the element you actually care about. Faster *and* a real assertion about what rendered:
+**A 404 exits 0 with `ok: true`.** Deliberately: a not-found page is a page, and screenshotting or scraping it is legitimate. But it means *the exit code is not a fetch check* — a missing page hands you the site's "not found" HTML and nothing signals it.
+
+```sh
+# Read .status and decide for yourself.
+echo 'document.title' | bbb eval https://example.com/maybe --json   # -> {"ok":true,...,"status":404}
+
+# Or let --fail decide: non-2xx becomes ok:false, kind "http", exit 4.
+bbb shot https://example.com/maybe out.png --fail --json
+# -> {"ok":false,"error":{"kind":"http","status":404,"message":"HTTP 404 for ..."},"logs":[],"status":404}
+```
+
+`--fail` is opt-in and modelled on `curl --fail`. With it the status is checked *before* your JS runs and before any screenshot is taken — a non-2xx never gets that far. It has no effect on a local file or `about:blank`, where there is no status to fail on. Identical flag, field and codes in `domdomdom`.
+
+## The gotcha that will bite you: streaming pages return early and look fine
+
+`bbb` waits for `networkidle2` by default, which is right for an ordinary page and **wrong for anything streaming** — SSE, an open WebSocket, an htmx long-poll.
+
+The failure is not slowness. It is **fast, `ok: true`, and silently wrong.**
+
+At `domcontentloaded` the page's own script has not connected its `EventSource` yet, so the network is briefly quiet, `networkidle2` is satisfied *immediately*, and your JS runs before a single event has arrived. Measured 3/3 against an SSE page pushing 5 items over 3 seconds:
+
+| Command | Result | Time |
+| --- | --- | --- |
+| `… \| bbb eval …/sse --json` | `{"ok":true,"result":0}` | ~1.3s |
+| `… \| bbb eval …/sse --json --wait '[data-done]'` | `{"ok":true,"result":5}` | ~3.8s |
+
+Both say `ok: true`. Both exit 0. The first is an empty answer wearing a success. Nothing in the output distinguishes "the page has no items" from "the page has not been given time to have any" — so **you will not notice, and there is no error to notice.**
+
+**Use `--wait <selector>`** on anything that streams. It skips network-idle entirely, waits for `domcontentloaded`, then waits for the element you actually care about — a real assertion about what rendered:
 
 ```sh
 bbb shot http://localhost:3000/stream out.png --wait '[data-done]'
 echo 'document.querySelectorAll("li").length' | bbb eval http://localhost:3000/feed --wait 'li:nth-child(5)'
 ```
 
-Without `--wait`, a network-idle timeout falls back to `domcontentloaded` plus a short settle rather than failing — so a screenshot still comes out, it just costs the full timeout first. Naming a selector is always better.
+The rule of thumb: **if the interesting content arrives after the first paint, name it with `--wait`.** A zero, an empty array or a bare skeleton back from a page you know has content is this, every time.
+
+(A page that holds *many* connections open — chatty long-polling — is the other shape: there `networkidle2` genuinely never fires, and `bbb` falls back to `domcontentloaded` plus a short settle rather than failing. That one costs the timeout, but still returns. `--wait` fixes both.)
 
 ## Cold vs daemon
 
@@ -165,6 +195,8 @@ bbb run flow.mjs --json
 ```
 Contract: `export default async ({ browser, page, args, goto, puppeteer }) => value`. A returned value prints as JSON. `args` is everything after the script path — bbb's own flags must come *before* it. Prefer `.mjs`; a `.ts` script needs Node ≥22.18, Bun, or Deno.
 
+`goto(url)` resolves to `{ strategy, status }` — `strategy` is how it settled (`wait-selector` / `networkidle2` / `domcontentloaded`), `status` the final HTTP status or `null`. The last navigation's status is what the command reports, and `--fail` applies to each one.
+
 ## Engine management
 
 ```sh
@@ -191,7 +223,10 @@ Engines live in `~/.cache/browsebrowsebrowse/engines/<version>/` — outside `no
 
 ## When things go wrong
 
-- **Exit 2 on a page that clearly loads** — streaming. Add `--wait <selector>`.
+- **An empty or short result from a page you know has content** — streaming, returning before the stream opened. Add `--wait <selector>`. There is no error; the count is just wrong.
+- **Exit 2 on a page that clearly loads** — the other streaming shape (many connections held open). Also `--wait <selector>`.
+- **A plausible result from a page you expected to exist** — check `status`. A 404 returns the site's not-found HTML with `ok: true` and exit 0. Re-run with `--fail`.
+- **Exit 4** — `--fail` was passed and the page was non-2xx. Nothing ran; nothing was captured.
 - **Exit 3, "no Chrome engine installed"** — run the `bbb engine install` command it printed. Expected in CI; never automatic there.
 - **Exit 3 mentioning `CHROME_PATH`** — it points at a directory or a missing file. It must be the executable itself.
 - **`ok: true` but `result` is `undefined`** — multi-line code needs an explicit `return`.

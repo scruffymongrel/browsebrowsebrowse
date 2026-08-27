@@ -119,12 +119,13 @@ A URL argument can be a full URL, a bare host (`example.com` → https, `localho
 
 | Flag                     | Effect                                                    |
 | ------------------------ | --------------------------------------------------------- |
-| `--json`                 | one line of `{ ok, result, logs }` on stdout               |
+| `--json`                 | one line of `{ ok, result, logs, status }` on stdout        |
 | `--timeout <ms>`         | navigation/selector budget (default `30000`)               |
 | `--viewport <WxH>`       | page viewport (default `1440x900`)                         |
 | `--w <n>` / `--h <n>`    | viewport width/height; beat `--viewport`                   |
 | `--full`                 | full-page screenshot (`shot`)                              |
 | `--wait <selector>`      | wait for a selector instead of network idle                |
+| `--fail`                 | treat a non-2xx page as an error, like `curl --fail`       |
 | `--user-agent <ua>`      | override `navigator.userAgent`                             |
 | `--engine-version <ver>` | use a specific Chrome build for this run                   |
 | `--no-install`           | never download an engine; fail with the command instead    |
@@ -137,13 +138,31 @@ Human by default: result on stdout (strings verbatim, so `bbb html url > page.ht
 `--json`: exactly one line, nothing else.
 
 ```json
-{ "ok": true,  "result": <any>, "logs": [{ "level": "log"|"warn"|"error"|"info"|"debug", "message": "..." }] }
-{ "ok": false, "error": { "kind": "eval"|"timeout"|"setup", "message": "...", "stack": "..." }, "logs": [] }
+{ "ok": true,  "result": <any>, "logs": [{ "level": "log"|"warn"|"error"|"info"|"debug", "message": "..." }], "status": <number|null> }
+{ "ok": false, "error": { "kind": "eval"|"timeout"|"setup"|"http", "message": "...", "stack": "..." }, "logs": [], "status": <number|null> }
 ```
 
-**Exit codes:** `0` ok · `1` eval error · `2` timeout · `3` setup/usage error.
+**Exit codes:** `0` ok · `1` eval error · `2` timeout · `3` setup/usage error · `4` HTTP error (`--fail` only).
 
 All of this is deliberately identical to domdomdom, down to JS arriving on **stdin** rather than as an argument. Two tools that feel like one tool means an agent that learns either can drive both.
+
+### HTTP status, and why the exit code is not a fetch check
+
+Every `--json` line carries `status`: the main document's **final** HTTP status, after redirects. It is `null` — not omitted — whenever there wasn't one: a local file, a `data:` URL, `about:blank`, or a verb that never navigates (`serve`, `status`, `engine …`, `doctor`). One shape, always.
+
+Chrome reports `200` for a `file:` URL. That is nulled before it reaches the output: `status` answers "what did the server say", not "could Chrome read this", and `--fail` must not pass judgement on something that was never fetched.
+
+**Without `--fail`, a 404 is a success.** It exits `0` with `ok: true` and the not-found page's content, because a non-2xx page is still a page — screenshotting an error page is a perfectly reasonable thing to want. The consequence is worth stating plainly: the exit code tells you whether *the command* worked, never whether the page was there.
+
+```sh
+echo 'document.title' | bbb eval https://example.com/nope --json
+# {"ok":true,"result":"Page not found","logs":[],"status":404}   exit 0
+
+bbb shot https://example.com/nope out.png --fail --json
+# {"ok":false,"error":{"kind":"http","status":404,"message":"HTTP 404 for https://example.com/nope"},"logs":[],"status":404}   exit 4
+```
+
+`--fail` is opt-in, and checks the status *before* the verb does its work — on a non-2xx your JS never runs and no screenshot is written. Same flag, same field, same codes in domdomdom.
 
 ### `eval`
 
@@ -178,9 +197,20 @@ bbb --json run flow.mjs http://localhost:3000 --depth 3
 
 A returned value prints as JSON. `args` is everything after the script path — **bbb's own flags must come before it**, since anything after belongs to the script. Prefer `.mjs`; a `.ts` script needs a runtime that handles types (Node ≥22.18, Bun, or Deno).
 
+`goto(url)` resolves to `{ strategy, status }`: how the navigation settled (`wait-selector` / `networkidle2` / `domcontentloaded`) and the final HTTP status, or `null`. The last navigation's status is the one the command reports, and `--fail` applies to every one.
+
 ## Streaming pages: the one gotcha
 
-`bbb` navigates once with `domcontentloaded` and then waits for the network to go idle (at most two open connections, quiet for 500ms). That is right for an ordinary page and **wrong for anything streaming** — an SSE connection, an open WebSocket or an htmx long-poll means the network never quiets down, so the wait burns the whole `--timeout` on a page that rendered fine a second in.
+`bbb` navigates once with `domcontentloaded` and then waits for the network to go idle (at most two open connections, quiet for 500ms). That is right for an ordinary page and **wrong for anything streaming** — but not in the way you would expect.
+
+**The failure is fast, `ok: true`, and silently wrong.** At `domcontentloaded` the page's script has not opened its `EventSource` yet, so the network *is* idle, `networkidle2` is satisfied immediately, and the eval runs before any event has arrived. Measured 3/3 against an SSE page pushing 5 items over 3 seconds:
+
+| Command | Result | Time |
+| --- | --- | --- |
+| `… \| bbb eval …/sse --json` | `{"ok":true,"result":0}` | ~1.3s |
+| `… \| bbb eval …/sse --json --wait '[data-done]'` | `{"ok":true,"result":5}` | ~3.8s |
+
+Both exit 0. Nothing in the first distinguishes "there are no items" from "no time was given for any". An earlier version of this README and the skill said an SSE page "burns the whole `--timeout`" — it does not, and that is the more dangerous story, because someone told they will hit a timeout believes they will notice.
 
 Name a selector instead. It skips the idle wait entirely, and is a real assertion about what rendered:
 
@@ -188,7 +218,7 @@ Name a selector instead. It skips the idle wait entirely, and is a real assertio
 bbb shot http://localhost:3000/feed out.png --wait '[data-done]'
 ```
 
-Without `--wait`, an idle timeout falls back to a short settle rather than failing, so you still get a screenshot — it just costs the full timeout first.
+The other streaming shape — a page holding *many* connections open, like chatty long-polling — is the one where `networkidle2` genuinely never fires. There the idle timeout falls back to a short settle rather than failing, so you still get a screenshot; it just costs the full timeout first. `--wait` is the answer to both.
 
 ## Two things that will bite you if you fork this
 
@@ -261,7 +291,7 @@ cp -r "$(npm root -g)/browsebrowsebrowse/skills/browsebrowsebrowse" <your-agent>
 
 For agents without skill support, paste this into your system prompt:
 
-> For screenshots, PDFs, layout/computed styles, clicking and typing, or streaming pages, use `bbb` (browsebrowsebrowse): `bbb shot <url> out.png`, `bbb pdf`, `bbb html`, `bbb text`, and `echo '<js>' | bbb eval <url> --json`. Add `--json` and parse one line of `{ok, result, logs}`; exit codes are 0 ok / 1 eval / 2 timeout / 3 setup. On a streaming page (SSE, htmx, long-poll) always pass `--wait <selector>`. For DOM queries and extraction that need no rendering, use `domdomdom` instead — it is much cheaper.
+> For screenshots, PDFs, layout/computed styles, clicking and typing, or streaming pages, use `bbb` (browsebrowsebrowse): `bbb shot <url> out.png`, `bbb pdf`, `bbb html`, `bbb text`, and `echo '<js>' | bbb eval <url> --json`. Add `--json` and parse one line of `{ok, result, logs, status}`; exit codes are 0 ok / 1 eval / 2 timeout / 3 setup / 4 HTTP. A non-2xx page still returns `ok: true` and exit 0 — read `status` (the final HTTP status, `null` for non-HTTP sources) or pass `--fail`. On a streaming page (SSE, htmx, long-poll) always pass `--wait <selector>`: without it the eval runs before the stream opens and returns an empty answer that looks successful. For DOM queries and extraction that need no rendering, use `domdomdom` instead — it is much cheaper.
 
 ## Development
 
