@@ -1,12 +1,29 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runCli, type CliIO } from '../../cli.ts'
+import { CLI_PATH, INDEX_PATH, TARGET, runCli, type CliIO } from '../subject.ts'
 import { startFixtures, type Fixtures } from '../fixtures/server.ts'
 import { ENGINE, scratch, type Scratch } from './support.ts'
 
 const it = describe.skipIf(!ENGINE)
+
+// Deliberately NOT skipped when there is no engine, and deliberately first: it
+// is the canary for the dual-target gate itself. Everything below runs against
+// whatever `../subject.ts` loaded, and the way that gate fails is by silently
+// loading the source during a `BBB_TEST_DIST=1` run — green, and proving
+// nothing about the bytes npm ships. This asserts the switch actually switched
+// and the target exists on disk.
+describe('the dual-target switch', () => {
+  test('subject.ts resolved the target this run asked for', () => {
+    expect(TARGET).toBe(process.env.BBB_TEST_DIST === '1' ? 'dist' : 'src')
+    const expected = TARGET === 'dist' ? ['/dist/cli.js', '/dist/index.js'] : ['/cli.ts', '/index.ts']
+    expect(CLI_PATH.endsWith(expected[0]!)).toBe(true)
+    expect(INDEX_PATH.endsWith(expected[1]!)).toBe(true)
+    expect(existsSync(CLI_PATH)).toBe(true)
+    expect(existsSync(INDEX_PATH)).toBe(true)
+  })
+})
 
 let fx: Fixtures
 let sc: Scratch

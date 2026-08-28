@@ -8,7 +8,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { runCli, type CliIO } from '../../cli.ts'
+import { runCli, type CliIO } from '../subject.ts'
 import { startFixtures, type Fixtures } from '../fixtures/server.ts'
 import { ENGINE, scratch, type Scratch } from './support.ts'
 

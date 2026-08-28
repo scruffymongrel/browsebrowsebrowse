@@ -38,9 +38,9 @@ gh run watch
 ```
 
 CI then runs: quality gate → Node smoke test → packed-tarball smoke test →
-engine install → integration tests → `npm version` (bump + `chore(release):
-vX.Y.Z` commit + annotated tag) → push → `npm publish` via Trusted Publishing
-(OIDC) → build the plugin channel and advance `release`.
+engine install → dist-target integration tests → `npm version` (bump +
+`chore(release): vX.Y.Z` commit + annotated tag) → push → `npm publish` via
+Trusted Publishing (OIDC) → build the plugin channel and advance `release`.
 
 **`release.yml` and `test.yml` must gate on the same checks.** They drifted once
 — `test.yml` grew a step `release.yml` didn't have — and a release broke on
@@ -128,11 +128,12 @@ Invariants — these are the ways to get it wrong:
 ## Checks
 
 ```sh
-bun run quality           # tsc --noEmit + coverage-gated unit tests
-bun run test:integration  # the browser-touching suite (needs an engine)
-bun run smoke:node        # runs the CLI from the checkout under Node
-bun run smoke:pack        # packs, installs the tarball, runs it under Node, Bun AND Deno
-bun run build             # compile dist/ (runs automatically via prepack)
+bun run quality                # tsc --noEmit + coverage-gated unit tests
+bun run test:integration       # the browser-touching suite, against src (needs an engine)
+bun run test:integration:dist  # build, then the same suite against the shipped dist/
+bun run smoke:node             # runs the CLI from the checkout under Node
+bun run smoke:pack             # packs, installs the tarball, runs it under Node, Bun AND Deno
+bun run build                  # compile dist/ (runs automatically via prepack)
 ```
 
 - **Coverage is enforced at 100%** (lines + functions), but only over
@@ -141,7 +142,8 @@ bun run build             # compile dist/ (runs automatically via prepack)
   threshold; nothing under `src/` proper is ever loaded there.
 
   That split is the design, not a compromise. Browser-touching code is covered
-  by `test/integration`, which drives a real Chrome and is **not** gated.
+  by `test/integration`, which drives a real Chrome and is **not** gated (see
+  the dist-run note below for the second reason coverage is off there).
   Chasing 100% across a process-spawning, CDP-speaking codebase would mean
   testing mocks of Chrome rather than Chrome. **Don't add mock-based tests to
   raise the number.** If you add a pure module, it must reach 100%; if you add
@@ -150,10 +152,82 @@ bun run build             # compile dist/ (runs automatically via prepack)
   Note the threshold keys in `bunfig.toml` are plural (`lines`/`functions`) —
   bun silently ignores the singular spellings, gating nothing. Verified by
   adding an uncovered function and watching the exit code.
-- **`bun test --config X` needs the `=`.** `bun test --config=bunfig.integration.toml`
-  applies the file; `bun test --config bunfig.integration.toml` silently does
-  not, and the integration suite runs under the coverage gate instead. It looks
-  identical apart from a coverage table appearing.
+- **The integration suite is dual-target, and CI runs it against `dist/`.**
+  Tests that exercise the *entry points* import them from `test/subject.ts`
+  rather than from `../../cli.ts` / `../../index.ts`, and that module loads
+  either the `.ts` source or `dist/*.js` depending on `BBB_TEST_DIST=1`. Its
+  import specifiers are computed rather than literal so `tsc` never tries to
+  resolve `dist/`, which exists only after a build.
+
+  ```sh
+  bun run test:integration       # src target, no build needed — the local loop
+  bun run test:integration:dist  # bun run build && BBB_TEST_DIST=1 …
+  ```
+
+  Why the integration suite specifically: `quality` has only ever exercised the
+  `.ts` source while npm ships compiled `dist/`, and that exact gap is how a
+  broken npm+Node install survived three releases of `domdomdom` with CI green.
+  `smoke:pack` proves the built binary *runs*; this proves it still *behaves*.
+  The integration suite is where source and build can actually diverge — `bbb
+  run` dynamic-imports a script, `daemon.ts` spawns a process, and both go
+  through the bundler's module graph.
+
+  - **Scope it. Don't grow `subject.ts` into a re-export of every module.**
+    Only `index.ts` and `cli.ts` are indirected. `test/unit/*` keeps importing
+    `src/pure/*` directly on purpose: those are pure functions, they are bundled
+    into `dist/` verbatim, and they are exercised through the entry points
+    anyway. Redirecting them would add fifteen re-exports and no signal.
+  - **A test that names a module by *path* cannot be redirected by an import.**
+    Spawning the bin as a child process, symlinking it, feeding it to
+    `isEntrypoint()` — hardcode `resolve(root, 'cli.ts')` in one of those and it
+    stays green under `BBB_TEST_DIST=1` while still running the source. That is
+    a gate passing for the wrong reason, which is worse than no gate. Use
+    `CLI_PATH` / `INDEX_PATH` from `subject.ts`; they point at whichever target
+    the run is exercising. `TARGET` (`'src'` | `'dist'`) tells you which when a
+    failure reproduces under one only, and a non-skipping canary test at the top
+    of `test/integration/cli.test.ts` asserts the switch actually switched.
+  - **Two path references are deliberately *not* redirected.**
+    `scripts/smoke-node.mjs` runs `node cli.ts` from the checkout — that is the
+    whole point of that script (it is how the `HttpError` parameter-property bug
+    was caught), and it is labelled a known gap there. The no-engine notice in
+    `test/integration/support.ts` prints `bun run cli.ts engine install stable`;
+    it is advice for a human, executed by nobody.
+  - **CI runs the dist target only, not both.** `dist/` is built from `src/`, so
+    a source-level regression surfaces in the dist run too; a second Chrome
+    cycle would roughly double the slowest job to distinguish cases that
+    `TARGET` plus a local `bun run test:integration` already separate. The
+    source path keeps its own gates: the coverage-gated unit suite, and
+    `smoke:node`, which runs the `.ts` under Node.
+- **The dist run needs `coverage = false`, and not for the obvious reason.**
+  It is tempting to think a dist run would report ~0% and fail the threshold.
+  It would not. Bun measures whatever files are *loaded*, and with no include
+  list that is the `dist/` bundle — so it reports ~100% on bundler output and
+  **passes**, while gating a content-hashed chunk (`dist/index-w516wk6t.js`)
+  whose filename changes on every build. It would stay green forever while
+  asserting nothing about `src/`. `bunfig.integration.toml` turns coverage off;
+  `bun test test/unit` under `bunfig.toml` is where the 100% threshold means
+  something.
+- **`bun test --config X` needs the `=`** — but not for the reason this file
+  used to give. Measured on **bun 1.4.0** (`34cbb9a40`); the behaviour has
+  evidently changed at least once, so re-measure before trusting this.
+
+  With a space, bun does not read the next token as the option's value. It takes
+  the path as a **positional test-path filter** and falls back to `bunfig.toml`.
+  Two failure modes, neither of them silent and neither of them green (the
+  first row is the control):
+
+  | invocation | result |
+  | --- | --- |
+  | `bun test --config=bunfig.integration.toml test/integration` | config applied, no coverage table, **exit 0** |
+  | `bun test --config bunfig.integration.toml test/integration` | 43 pass, but `bunfig.toml`'s gate applies — coverage table, 81.25% lines, **exit 1** |
+  | `bun test --config bunfig.integration.toml` (no other positional) | `filters did not match any test files`, 0 tests run, **exit 1** |
+
+  The danger is the opposite of "silently runs under the coverage gate": a
+  space-form step that is wrapped in `|| true` or `continue-on-error` turns
+  *ran nothing* into green. Never soften the exit code of a `bun test` step.
+
+  Proof the config is live: the `=` form prints **no** coverage table; the space
+  form and a bare `bun test` both print one.
 - **The toolchain is Bun-only. Never add a step that requires Node locally.**
   Scripts run under `bun`, the build shells out to `bunx tsc`, and packing uses
   `bun pm pack` / `bun add`. Node is a *target* runtime, not a build dependency.

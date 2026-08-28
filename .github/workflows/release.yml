@@ -94,8 +94,10 @@ jobs:
       - name: Install a Chrome engine
         run: bun run cli.ts engine install stable
 
-      - name: Integration tests
-        run: bun run test:integration
+      # The dist-target integration run, matching test.yml — see the comment
+      # there for why it is dist only. Keep the two workflows in step.
+      - name: Integration tests (dist target)
+        run: bun run test:integration:dist
 
       - name: Configure git identity
         run: |

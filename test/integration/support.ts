@@ -12,8 +12,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { loadConfig } from '../../src/config.ts'
-import { resolve as resolveEngine } from '../../src/engine.ts'
+import { loadConfig, resolveEngine } from '../subject.ts'
 
 export interface Scratch {
   env: NodeJS.ProcessEnv

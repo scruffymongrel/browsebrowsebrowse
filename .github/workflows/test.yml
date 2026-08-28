@@ -73,4 +73,16 @@ jobs:
       - name: Allow Chrome's sandbox to initialise
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: bun run cli.ts engine install stable
-      - run: bun run test:integration
+      # Against the compiled dist/ that npm actually ships, not the .ts source.
+      # This is the half of the suite where source and build can genuinely
+      # diverge: `bbb run` dynamic-imports a script, daemon.ts spawns a process,
+      # and both go through the bundler's module graph. smoke:pack proves the
+      # built binary runs; this proves it still behaves.
+      #
+      # Deliberately dist only, not dist *and* src. dist/ is built from src/, so
+      # a source-level regression surfaces here too; a second Chrome cycle would
+      # roughly double the slowest job to distinguish cases that `TARGET` and a
+      # local `bun run test:integration` already separate. The source path keeps
+      # its own gates: the coverage-gated unit suite, and smoke:node, which runs
+      # the .ts from the checkout under Node.
+      - run: bun run test:integration:dist

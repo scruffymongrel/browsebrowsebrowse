@@ -26,6 +26,7 @@
   "scripts": {
     "test": "bun test test/unit",
     "test:integration": "bun test --config=bunfig.integration.toml test/integration",
+    "test:integration:dist": "bun run build && BBB_TEST_DIST=1 bun test --config=bunfig.integration.toml test/integration",
     "typecheck": "tsc --noEmit",
     "quality": "tsc --noEmit && bun test test/unit",
     "build": "bun scripts/build.mjs",

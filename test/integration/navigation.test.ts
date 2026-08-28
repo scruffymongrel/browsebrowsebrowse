@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { loadConfig } from '../../src/config.ts'
-import { goto, withSession } from '../../src/session.ts'
+import { goto, loadConfig, withSession } from '../subject.ts'
+// A pure constant, not an entry point: it is bundled verbatim into dist/, and
+// importing it from source here is what makes the dist run a real comparison.
 import { DEFAULT_VIEWPORT } from '../../src/pure/args.ts'
 import { startFixtures, type Fixtures } from '../fixtures/server.ts'
 import { ENGINE, scratch, type Scratch } from './support.ts'

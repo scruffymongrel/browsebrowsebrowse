@@ -1,4 +1,20 @@
 [test]
 # Integration tests drive a real Chrome. They are deliberately outside the
-# coverage gate: see the comment in bunfig.toml.
+# coverage gate for the reason in bunfig.toml: covering a process-spawning,
+# CDP-speaking codebase to a threshold would mean testing mocks of Chrome.
+#
+# This config is also what the dist-target run uses
+# (`bun run test:integration:dist`, BBB_TEST_DIST=1), and coverage=false is
+# load-bearing there for a second, less obvious reason. A dist run does NOT
+# report ~0% and fail. Bun measures whatever files are *loaded*, and with no
+# include list that is the dist/ bundle — so it would report ~100% on bundler
+# output and pass, while gating a chunk whose content-hashed filename changes
+# on every build. It would stay green forever while asserting nothing about
+# src/. The gated run is `bun test test/unit` under bunfig.toml, and that is
+# where the 100% threshold means something.
+#
+# NB: measured on bun 1.4.0, `--config` needs the `=`.
+# `bun test --config=bunfig.integration.toml test/integration` applies this
+# file. With a space, bun takes the path as a positional test-path filter and
+# falls back to bunfig.toml — see AGENTS.md for exactly how that fails.
 coverage = false
