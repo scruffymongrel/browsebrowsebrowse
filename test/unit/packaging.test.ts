@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { DEFAULT_VIEWPORT } from '../../src/pure/args.ts'
 
 const root = resolve(import.meta.dir, '..', '..')
 const read = (p: string): Record<string, unknown> =>
@@ -34,6 +35,42 @@ describe('packaging', () => {
     expect(readFileSync(resolve(root, 'scripts/build.mjs'), 'utf8')).toContain(
       '#!/usr/bin/env -S node',
     )
+  })
+
+  // The floor above is pinned to puppeteer-core's own package.json, but the
+  // docs restate the *number* by hand — and a hand-copied version is exactly
+  // what goes stale when the dependency raises its floor. (Rule 1 of "Writing
+  // docs in this repo": a claim that can be a test shouldn't be a sentence.)
+  test('the docs state the same Node floor as package.json', () => {
+    const floor = (read('package.json') as { engines: { node: string } }).engines.node
+    for (const doc of ['AGENTS.md', 'README.md']) {
+      expect(readFileSync(resolve(root, doc), 'utf8')).toContain(`node ${floor}`)
+    }
+    // The README's runtime table abbreviates ("Node ≥ 22.12"), so match the
+    // prefix rather than the whole version.
+    const abbrev =
+      readFileSync(resolve(root, 'README.md'), 'utf8').match(/Node ≥ ([\d.]+)/)?.[1] ?? ''
+    expect(abbrev).not.toBe('')
+    expect(floor.replace(/^>=/, '').startsWith(abbrev)).toBe(true)
+  })
+
+  // `bun run release` is the documented path and the raw `gh workflow run` is
+  // the escape hatch, because CI releases origin/main rather than what you
+  // have. If the script or the docs go, the invariant goes silently with them.
+  test('the release wrapper exists and is what the docs tell you to run', () => {
+    const pkg = read('package.json') as { scripts: Record<string, string> }
+    expect(pkg.scripts.release).toBe('bun scripts/release.mjs')
+    expect(existsSync(resolve(root, 'scripts/release.mjs'))).toBe(true)
+    for (const doc of ['AGENTS.md', 'README.md']) {
+      expect(readFileSync(resolve(root, doc), 'utf8')).toContain('bun run release patch|minor|major')
+    }
+  })
+
+  // The README's flag table states a default that lives in code. Tying the two
+  // together is cheaper than remembering to update both.
+  test('the README documents the real default viewport', () => {
+    const readme = readFileSync(resolve(root, 'README.md'), 'utf8')
+    expect(readme).toContain(`default \`${DEFAULT_VIEWPORT.width}x${DEFAULT_VIEWPORT.height}\``)
   })
 
   test('both bin aliases point at the built CLI', () => {

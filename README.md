@@ -319,8 +319,10 @@ CHROME_PATH=/path/to/chrome-headless-shell bun run test:integration
 Fully automated; no manual steps and no npm token.
 
 ```sh
-gh workflow run release.yml -f bump=patch|minor|major
+bun run release patch|minor|major
 ```
+
+`scripts/release.mjs` wraps that dispatch, and the wrapper is the point rather than the convenience: CI releases whatever is on `origin/main`, so it **refuses unless local `main` and `origin/main` are identical** — behind means publishing a commit you never ran, ahead means publishing without your unpushed work, and both used to be silent. On success it pulls the release commit back, which the bare `gh workflow run release.yml -f bump=…` never did; local `main` then sat a commit behind until someone noticed. The raw dispatch is still there as an escape hatch (see AGENTS.md), but it leaves the `git pull --ff-only origin main` to you.
 
 CI runs the quality gate, the Node smoke test, the packed-tarball smoke test and the integration suite, then bumps the version, commits, tags, pushes and publishes to npm via [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) with provenance. It refuses to run anywhere but `main`. `release.yml` and `test.yml` gate on the same checks on purpose — they drifted once and a release broke on a step PR CI had never run.
 

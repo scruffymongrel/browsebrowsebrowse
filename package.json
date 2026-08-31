@@ -29,6 +29,7 @@
     "test:integration:dist": "bun run build && BBB_TEST_DIST=1 bun test --config=bunfig.integration.toml test/integration",
     "typecheck": "tsc --noEmit",
     "quality": "tsc --noEmit && bun test test/unit",
+    "release": "bun scripts/release.mjs",
     "build": "bun scripts/build.mjs",
     "smoke:node": "bun scripts/smoke-node.mjs",
     "smoke:pack": "bun scripts/smoke-pack.mjs",
