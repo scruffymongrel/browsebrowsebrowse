@@ -26,7 +26,7 @@ jobs:
   # branch protection wait forever on a check that no longer runs.
   #
   # Neither job installs a Chrome engine. Both are deliberately engine-free, so
-  # PR CI never spends 180MB and a minute of download on checks that are really
+  # PR CI never spends an engine download and a minute on checks that are really
   # about module resolution and packaging.
   node:
     runs-on: ubuntu-latest
@@ -48,9 +48,9 @@ jobs:
       # stripping is allowed and node_modules' isn't. Gates Node, Bun and Deno.
       - run: bun run smoke:pack
 
-  # The browser-touching half. Separated because it downloads a ~180MB engine,
-  # so it is worth seeing fail on its own rather than as a slow flake inside the
-  # fast jobs.
+  # The browser-touching half. Separated because it downloads the Chrome engine
+  # (~190MB on disk; AGENTS.md carries the measurement), so it is worth seeing
+  # fail on its own rather than as a slow flake inside the fast jobs.
   integration:
     runs-on: ubuntu-latest
     steps:

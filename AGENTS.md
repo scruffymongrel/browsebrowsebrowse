@@ -21,11 +21,41 @@ would be a third thing to version for two functions; the duplication is the
 cheaper trade, but it only works if you change both.
 
 Most of `skills/browsebrowsebrowse/SKILL.md` is about routing *away* from this
-tool towards `domdomdom`. That is on purpose: `bbb` costs a 180MB engine,
-~0.8-1.2s cold, and ~180MB resident while daemonised, and most page work needs
-none of it. Note domdomdom ships `domdomdom` on every version and gained a `ddd`
-alias in 0.3.0, so a command written against `ddd` breaks on older installs.
-Write `domdomdom` unless the newer version is confirmed.
+tool towards `domdomdom`. That is on purpose, and the costs are these — all
+measured 2026-09-01 on the bench recorded under "Writing docs in this repo",
+median of 5 on a trivial page unless stated:
+
+| | `domdomdom` | `bbb` cold | `bbb` daemonised |
+| --- | --- | --- | --- |
+| Wall clock | 0.25s (inline page) | 0.87s (`data:` page) | 0.74s |
+| Engine on disk | none | 193MB | 193MB |
+| Resident | in-process | transient | 142MB idle |
+
+That is a **~3.5x** latency gap cold (0.87 / 0.25) on the easiest possible page,
+so both ends are floors. The engine figure is `du -sh` on
+`~/.cache/browsebrowsebrowse/engines/152.0.7977.64/`; docs round it to ~190MB.
+Resident memory is **not** a constant — it grows with the pages the session
+holds open: 142MB idle after `serve`, 168MB after one simple page, 187MB after
+three heavy ones.
+
+Three of those numbers were wrong here until 2026-09-01, each in an instructive
+way. "Roughly 4x" was a ratio nobody had divided (it is 3.5). "180MB" for the
+engine understated it by 13MB and had been hand-copied into a dozen files. And
+"~180MB resident while daemonised" was the *loaded* figure wearing the idle
+figure's label — the kind of error that survives because the number looks
+plausible either way.
+
+`ENGINE_DOWNLOAD_MB` in `src/engine.ts` still reads `180`, deliberately: it is
+the estimate printed in the consent notice *before* a download, a different
+quantity from the extracted size above, and it has not been re-measured as a
+download. Docs quoting the on-disk size say ~190MB; docs quoting the notice
+verbatim must keep `~180MB` or they stop matching what the CLI prints.
+
+Most page work needs none of this.
+
+Note domdomdom ships `domdomdom` on every version and gained a `ddd` alias in
+0.3.0, so a command written against `ddd` breaks on older installs. Write
+`domdomdom` unless the newer version is confirmed.
 
 ## Writing docs in this repo
 
@@ -66,6 +96,16 @@ when it had already shipped, and a stale Node floor.
   from a fact that expired. Same for anything time-relative: "unpublished as of
   2026-08-26" beats "not yet published", because it makes staleness visible
   instead of invisible.
+
+  **The bench for this repo**, so no claim has to restate it: Apple M2, macOS
+  26.3.1, node 26.3.0, bun 1.4.0, deno 2.9.5, browsebrowsebrowse 0.2.0,
+  domdomdom 0.5.0, Chrome 152.0.7977.64. Figures dated **2026-09-01** were taken
+  there. An older date means measured then and not re-run since, which is worth
+  more than a fresh-looking number nobody took: the SSE table in the skill and
+  the README is stamped 2026-08-26 / bun 1.3.14 for exactly that reason. Neither
+  the npm tarball nor the plugin channel ships this file, so `README.md` and
+  `skills/browsebrowsebrowse/SKILL.md` each restate the bench once, beside their
+  own cost table, and nowhere else.
 - **Don't assert another project's status when you can link to it.** The "not
   yet published" claims — and the `ddd` one above — were assertions about
   `domdomdom`, a sibling repo one directory away with a canonical source of
@@ -164,7 +204,9 @@ Invariants — these are the ways to get it wrong:
 
   The old channel was `git push origin HEAD:release`, so it carried the whole
   dev tree including `bun.lock`, and every single plugin install materialised
-  ~46-50MB of `node_modules`. Those deps exist so a plugin's hooks and MCP
+  a full `node_modules` — **46MB**, measured 2026-09-01 from this repo's own
+  lockfile. It tracks the dependency tree, so re-measure it rather than
+  treating it as a constant. Those deps exist so a plugin's hooks and MCP
   servers can load them. **This plugin ships skills only — no hooks, no MCP
   servers** — so not one byte of it was ever loadable. `.claude-plugin/` is the
   only file a plugin actually requires; nothing requires a `package.json`, and
@@ -176,7 +218,8 @@ Invariants — these are the ways to get it wrong:
   channel in a throwaway repo and asserts the exact path set plus the absence of
   a `package.json` and any lockfile. **Don't "restore" the dev tree** — the
   files it would add (`cli.ts`, `test/`, `scripts/`, tsconfigs, `AGENTS.md`) are
-  read by nobody in the plugin cache and one of them costs 46MB per user.
+  read by nobody in the plugin cache and one of them — the lockfile — costs
+  every user the `node_modules` install measured above.
 - **The plugin channel and the npm channel ship different content, on
   purpose.** The plugin cache is a git clone of the built `plugin` branch:
   the manifest and the skill, and never a built binary — `dist/` is gitignored
@@ -337,8 +380,8 @@ bun run build                  # compile dist/ (runs automatically via prepack)
 - **PR CI never downloads an engine.** `smoke:node` and `smoke:pack` assert
   things that hold with no Chrome installed (help, `engine list`, the
   `--no-install` refusal, the CHROME_PATH-is-a-directory rejection). The
-  integration job installs one explicitly. Keep that separation: a 180MB
-  download on every PR is a tax on every change.
+  integration job installs one explicitly. Keep that separation: an engine
+  download on every PR (see the size above) is a tax on every change.
 - **Test the artifact, not the checkout.** `smoke:node` runs the CLI from the
   repo, where Node's type stripping is permitted. That difference hid a bug in
   domdomdom that shipped three times — Node refuses to strip types under

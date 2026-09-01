@@ -1,7 +1,7 @@
 /**
  * Which Chrome binary to launch. Deliberately tiny, and pure: the filesystem is
- * reached through an injected probe so every branch is testable without a
- * 180MB download.
+ * reached through an injected probe so every branch is testable without
+ * downloading an engine.
  *
  * An earlier prototype resolved the engine by scanning ms-playwright and
  * .cache/puppeteer for anything chrome-shaped, ranking candidates by the digits
@@ -106,10 +106,11 @@ export function resolveEngine(input: ResolveInput): EngineResolution {
 }
 
 /**
- * Whether it is acceptable to download ~180MB without being asked.
+ * Whether it is acceptable to download the engine without being asked. (Its
+ * size is `ENGINE_DOWNLOAD_MB`; AGENTS.md has the measured figure.)
  *
  * Yes at an interactive terminal, where the user sees the notice and can Ctrl-C.
- * Never in CI: a surprise 180MB fetch in someone's pipeline is a bug, so the
+ * Never in CI: a surprise engine fetch in someone's pipeline is a bug, so the
  * non-interactive path exits 3 and prints the command instead.
  *
  * The TTY checked is stderr, not stdout — `bbb text url > page.html` is normal

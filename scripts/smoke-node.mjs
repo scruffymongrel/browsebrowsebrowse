@@ -7,7 +7,7 @@
 // a user.
 //
 // Deliberately engine-free. Everything asserted here works with no Chrome
-// installed and no network, so CI never downloads 180MB to check that the
+// installed and no network, so CI never downloads an engine to check that the
 // module graph loads. The browser itself is covered by test/integration.
 //
 // KNOWN GAP — this runs the .ts from the repo, which is NOT how users get it.

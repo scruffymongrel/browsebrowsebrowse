@@ -162,7 +162,7 @@ describe('the engine cache', () => {
 })
 
 describe('mayAutoInstall', () => {
-  // A surprise 180MB download inside someone's pipeline is a bug, not a
+  // A surprise engine download inside someone's pipeline is a bug, not a
   // convenience — so CI never auto-installs however interactive it looks.
   test('never in CI', () => {
     expect(mayAutoInstall({ ci: true, stderrIsTty: true, optOut: false })).toBe(false)

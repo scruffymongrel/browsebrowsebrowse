@@ -53,7 +53,12 @@ import {
   type EngineManifest,
 } from './pure/versions.ts'
 
-/** Roughly what chrome-headless-shell weighs, for the consent notice. */
+/**
+ * The size quoted in the pre-download consent notice. Deliberately an estimate
+ * of the *download*, which is not the same quantity as the extracted engine on
+ * disk — that measured 193MB for 152.0.7977.64 on 2026-09-01, and the docs
+ * round it to ~190MB. See AGENTS.md, "What this is", before reconciling them.
+ */
 export const ENGINE_DOWNLOAD_MB = 180
 
 export const nodeProbe: EngineProbe = {
@@ -198,7 +203,7 @@ export interface ResolvedEngine {
  * The path every browser-touching command goes through.
  *
  * On a miss it either installs (interactive, with a printed notice) or refuses
- * with exit 3 and the exact command — never a silent 180MB download.
+ * with exit 3 and the exact command — never a silent engine download.
  */
 export async function ensureEngine(
   cfg: Config,

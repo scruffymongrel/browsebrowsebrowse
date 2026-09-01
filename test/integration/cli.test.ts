@@ -70,8 +70,9 @@ it('page verbs against a real engine', () => {
     expect(String(r.json().result)).toContain('static')
   })
 
-  // The whole reason a real engine is worth 180MB: the DOM reflects what the
-  // page's own scripts did, not just what the server sent.
+  // The whole reason a real engine is worth its disk (AGENTS.md carries the
+  // measured size): the DOM reflects what the page's own scripts did, not just
+  // what the server sent.
   test('html reflects script-mutated DOM', async () => {
     const r = await bbb(['html', fx.url('/')])
     expect(r.stdout).toContain('id="scripted"')

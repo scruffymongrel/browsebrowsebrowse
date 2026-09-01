@@ -13,15 +13,19 @@ It is the sibling of [domdomdom](https://github.com/scruffymongrel/domdomdom), w
 
 ## Which of the two do you want?
 
-`domdomdom` is roughly 4x faster, needs no 180MB engine and leaves no process running. **When both would work, use `domdomdom`.**
+`domdomdom` is ~3.5x faster, needs no ~190MB engine on disk and leaves no process running. **When both would work, use `domdomdom`.**
 
 |                                                        | `domdomdom`         | `bbb` (this)                    |
 | ------------------------------------------------------ | ------------------- | ------------------------------- |
-| DOM queries, extraction, `window.*` smoke tests         | ✅ ~200–300ms       | works, but wasteful             |
+| DOM queries, extraction, `window.*` smoke tests         | ✅ ~0.25s           | works, but wasteful             |
 | Screenshots, PDF, layout, `getComputedStyle`            | ❌ no rendering     | ✅                              |
 | Click, scroll, type, navigation flows                   | ❌                  | ✅                              |
 | Streaming pages you need to *see* settle                | ❌                  | ✅ (`--wait`)                   |
-| Cost                                                    | none                | ~180MB engine, ~0.8–1.2s cold / ~0.7s daemonised, ~180MB RSS while daemonised |
+| Cost                                                    | none                | ~190MB engine on disk, ~0.87s cold / ~0.74s daemonised, ~140MB RSS idle |
+
+**Where those numbers come from.** Measured 2026-09-01 on an Apple M2 (macOS 26.3.1, node 26.3.0, bun 1.4.0, deno 2.9.5, browsebrowsebrowse 0.2.0, domdomdom 0.5.0, Chrome 152.0.7977.64), median of 5 runs on a trivial page — `domdomdom` on an inline page, `bbb` on a `data:` page. Every other measurement in this file carries its own date; an older date means it has not been re-run since.
+
+Two of them deserve a caveat. The **~3.5x** is 0.87s / 0.25s on the easiest possible page, so it is a floor for both tools, not a throughput figure. And **RSS grows with the pages you hold open**: ~140MB idle after `serve`, ~168MB after one simple page, ~187MB after three heavy ones. An earlier version of this table said "~180MB RSS while daemonised", which was a loaded figure presented as an idle one.
 
 For anything that needs the user's own logged-in browser session — their cookies, their tabs — neither tool is right; use a browser extension such as claude-in-chrome.
 
@@ -57,7 +61,7 @@ Deno needs neither Node nor the shebang: `deno install -g` writes its own `#!/bi
 
 ### The engine
 
-`bbb` needs a Chrome engine (`chrome-headless-shell`, ~180MB). It installs one on first use **at an interactive terminal**, after printing what it is about to fetch. Anywhere non-interactive — CI, a pipe, a script — it exits `3` and prints the command instead:
+`bbb` needs a Chrome engine (`chrome-headless-shell`, **~190MB** on disk — 193MB measured for 152.0.7977.64 on 2026-09-01). It installs one on first use **at an interactive terminal**, after printing what it is about to fetch. Anywhere non-interactive — CI, a pipe, a script — it exits `3` and prints the command instead:
 
 ```
 SETUP ERROR: no Chrome engine installed.
@@ -65,7 +69,9 @@ Refusing to download ~180MB unprompted in a non-interactive session.
 Run:  bbb engine install stable
 ```
 
-A surprise 180MB download in somebody's pipeline is a bug, not a convenience.
+A surprise engine download in somebody's pipeline is a bug, not a convenience.
+
+(The notice says `~180MB` because that is `ENGINE_DOWNLOAD_MB` in `src/engine.ts`, a fixed pre-download estimate. The ~190MB above is what the extracted engine actually occupies on disk, measured. The two are different quantities and the estimate has not been re-measured as a *download*.)
 
 Engines live in `~/.cache/browsebrowsebrowse/engines/<version>/` — **outside `node_modules`**, so they survive reinstalls and one copy is shared by every project, global or local. This is the whole point of the `engine` verb: four tools each downloading their own Chrome is how a laptop loses a gigabyte.
 
@@ -96,7 +102,7 @@ bbb stop       # back to cold
 
 While a daemon is running, **every command uses it automatically**. There is no attach flag and no config file, because the failure mode of forgetting one — "why is it asking me to log in again?" — is exactly what the daemon exists to prevent.
 
-Start one when a login has to survive between commands, or when a heavy page would otherwise be launched from scratch each time. On a trivial page the daemon saves less than you might expect — most of the residual is process startup, not the browser. Stop it when you are done; it holds ~180MB.
+Start one when a login has to survive between commands, or when a heavy page would otherwise be launched from scratch each time. On a trivial page the daemon saves less than you might expect — most of the residual is process startup, not the browser. Stop it when you are done; it holds ~140MB idle and grows towards ~190MB as you use it (see the cost table above).
 
 ## CLI
 
@@ -203,7 +209,7 @@ A returned value prints as JSON. `args` is everything after the script path — 
 
 `bbb` navigates once with `domcontentloaded` and then waits for the network to go idle (at most two open connections, quiet for 500ms). That is right for an ordinary page and **wrong for anything streaming** — but not in the way you would expect.
 
-**The failure is fast, `ok: true`, and silently wrong.** At `domcontentloaded` the page's script has not opened its `EventSource` yet, so the network *is* idle, `networkidle2` is satisfied immediately, and the eval runs before any event has arrived. Measured 3/3 against an SSE page pushing 5 items over 3 seconds:
+**The failure is fast, `ok: true`, and silently wrong.** At `domcontentloaded` the page's script has not opened its `EventSource` yet, so the network *is* idle, `networkidle2` is satisfied immediately, and the eval runs before any event has arrived. Measured 2026-08-26, 3/3, against a local SSE fixture pushing 5 items over 3 seconds, on bun 1.3.14 — i.e. before the current toolchain, and not re-run since:
 
 | Command | Result | Time |
 | --- | --- | --- |
