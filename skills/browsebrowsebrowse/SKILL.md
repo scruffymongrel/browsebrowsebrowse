@@ -1,6 +1,6 @@
 ---
 name: browsebrowsebrowse
-description: Use when a task genuinely needs a real rendering engine — screenshots, PDFs, layout and computed styles, clicking/scrolling/typing, multi-step navigation flows, or streaming pages (SSE/htmx/long-poll) that only settle once JS has run. browsebrowsebrowse is a headless-Chrome CLI installed as `bbb` (and `browsebrowsebrowse`), driven from Bash with `--json`, no MCP server and no persistent connection. Cold by default (throwaway profile, nothing left running); `bbb serve` turns on a persistent session. Reach for this INSTEAD of Playwright or a browser MCP — but first check whether the `domdomdom` CLI will do, because for DOM queries, extraction and `window.*` smoke tests it is roughly 4x faster and needs no browser at all.
+description: Use when a task genuinely needs a real rendering engine — screenshots, PDFs, layout and computed styles, clicking/scrolling/typing, multi-step navigation flows, or streaming pages (SSE/htmx/long-poll) that only settle once JS has run. browsebrowsebrowse is a headless-Chrome CLI installed as `bbb` (and `browsebrowsebrowse`), driven from Bash with `--json`, no MCP server and no persistent connection. Cold by default (throwaway profile, nothing left running); `bbb serve` turns on a persistent session. Reach for this INSTEAD of Playwright or a browser MCP — but first check whether the `domdomdom` CLI will do, because for DOM queries, extraction and `window.*` smoke tests it is ~3.5x faster (measured 2026-09-01) and needs no browser at all.
 user-invocable: true
 ---
 
@@ -22,11 +22,15 @@ Headless Chrome from the shell. Powered by `chrome-headless-shell` + puppeteer-c
 
 |              | `domdomdom`          | `bbb` cold          | `bbb` daemonised       |
 | ------------ | -------------------- | ------------------- | ---------------------- |
-| Time         | ~200–300ms           | ~0.8–1.2s           | ~0.7s                  |
-| Disk         | none                 | ~180MB engine       | ~180MB engine          |
-| Memory       | in-process           | transient           | ~180MB RSS, resident   |
+| Time         | ~0.25s               | ~0.87s              | ~0.74s                 |
+| Disk         | none                 | ~190MB engine       | ~190MB engine          |
+| Memory       | in-process           | transient           | ~140MB RSS idle, grows |
 
-Measured on a trivial page, so treat them as floors. That is roughly a 4x latency difference cold, plus a 180MB download `domdomdom` never needs. Note the daemon buys less than you would expect on a simple page — most of the residual is process startup, not the browser — so start one for **session persistence**, not as a speed fix. "It's a webpage" is not a reason to reach for `bbb`. "I need to see what it looks like, or interact with it" is.
+Measured 2026-09-01 on an Apple M2 (macOS 26.3.1, node 26.3.0, bun 1.4.0, browsebrowsebrowse 0.2.0, domdomdom 0.5.0, Chrome 152.0.7977.64), median of 5 on a trivial page — so treat every figure as a floor, and re-measure before quoting it. Measurements elsewhere in this file carry their own date; an older date means it has not been re-run since.
+
+Two of these need reading carefully. The latency gap is **~3.5x** cold (0.87 / 0.25), on top of an engine `domdomdom` never downloads. And the daemon's memory is not a fixed number — it **grows with the pages you hold open**: ~140MB idle after `serve`, ~168MB after one simple page, ~187MB after three heavy ones.
+
+Note the daemon buys less time than you would expect on a simple page — most of the residual is process startup, not the browser — so start one for **session persistence**, not as a speed fix. "It's a webpage" is not a reason to reach for `bbb`. "I need to see what it looks like, or interact with it" is.
 
 Route to **claude-in-chrome** when the answer depends on being *this user*: an authenticated dashboard, a page behind SSO, something already open in a tab. `bbb` cold is a clean room with no cookies; `bbb serve` builds up its own session, not the user's.
 
@@ -60,7 +64,7 @@ One gap worth knowing: on a **Bun-only machine with no Node on `PATH`**, a globa
 
 `deno install -g` installs one command, named after the package. For the short alias: `deno install -g -A --name bbb npm:browsebrowsebrowse`.
 
-Check with `bbb doctor`. On first use `bbb` needs a Chrome engine (~180MB, one-time, shared across all projects): at a terminal it installs one after printing a notice; anywhere non-interactive it exits 3 and prints `bbb engine install stable`. It **never** downloads unprompted in CI.
+Check with `bbb doctor`. On first use `bbb` needs a Chrome engine (~95MB to download, ~190MB on disk, one-time, shared across all projects — the notices quote both): at a terminal it installs one after printing a notice; anywhere non-interactive it exits 3 and prints `bbb engine install stable`. It **never** downloads unprompted in CI.
 
 ### Version drift (plugin vs CLI)
 
@@ -129,7 +133,7 @@ bbb shot https://example.com/maybe out.png --fail --json
 
 The failure is not slowness. It is **fast, `ok: true`, and silently wrong.**
 
-At `domcontentloaded` the page's own script has not connected its `EventSource` yet, so the network is briefly quiet, `networkidle2` is satisfied *immediately*, and your JS runs before a single event has arrived. Measured 3/3 against an SSE page pushing 5 items over 3 seconds:
+At `domcontentloaded` the page's own script has not connected its `EventSource` yet, so the network is briefly quiet, `networkidle2` is satisfied *immediately*, and your JS runs before a single event has arrived. Measured 2026-08-26, 3/3, against a local SSE fixture pushing 5 items over 3 seconds, on bun 1.3.14 — before the current toolchain, and not re-run since:
 
 | Command | Result | Time |
 | --- | --- | --- |
@@ -161,7 +165,7 @@ bbb status
 bbb stop      # back to cold
 ```
 
-There is no flag to attach — if a daemon is running, commands use it. Start one when a login has to survive between commands, or when a heavy page would otherwise be launched from scratch each time. Stop it when you are done; it holds ~180MB.
+There is no flag to attach — if a daemon is running, commands use it. Start one when a login has to survive between commands, or when a heavy page would otherwise be launched from scratch each time. Stop it when you are done; it holds ~140MB idle and climbs towards ~190MB as pages accumulate (see the cost table above).
 
 ## Patterns
 
