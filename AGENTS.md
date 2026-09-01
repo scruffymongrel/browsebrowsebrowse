@@ -45,11 +45,21 @@ engine understated it by 13MB and had been hand-copied into a dozen files. And
 figure's label — the kind of error that survives because the number looks
 plausible either way.
 
-`ENGINE_DOWNLOAD_MB` in `src/engine.ts` still reads `180`, deliberately: it is
-the estimate printed in the consent notice *before* a download, a different
-quantity from the extracted size above, and it has not been re-measured as a
-download. Docs quoting the on-disk size say ~190MB; docs quoting the notice
-verbatim must keep `~180MB` or they stop matching what the CLI prints.
+`180` was also the value of `ENGINE_DOWNLOAD_MB` in `src/engine.ts` until
+2026-09-01, and it survived a pass that spared it on the reasoning that a
+pre-download estimate is a legitimately different quantity from the extracted
+size. The reasoning was right and the premise was wrong: `180` was not the
+download figure either, so it named nothing at all. Measured 2026-09-01 for
+152.0.7977.64 on mac-arm64, `Content-Length` on the Chrome-for-Testing zip is
+93MB and `du -sm` of the installed engine is 194MB. The constant is now two —
+`ENGINE_DOWNLOAD_MB = 95` and `ENGINE_DISK_MB = 190`, rounded to the nearest
+5MB and stamped at the declaration — and **every user-facing notice states
+both**, because at the moment someone consents the transfer cost and the
+lasting disk cost are different questions. Both drift upwards as Chrome grows.
+
+Docs quoting a notice verbatim (the README's fenced refusal block) must match
+what the CLI prints; `test/unit/packaging.test.ts` asserts that rather than
+asking anyone to remember it.
 
 Most page work needs none of this.
 

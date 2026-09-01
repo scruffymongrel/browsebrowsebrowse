@@ -20,6 +20,7 @@ import {
   stopDaemon,
 } from './daemon.ts'
 import {
+  ENGINE_DISK_MB,
   ENGINE_DOWNLOAD_MB,
   engineStatus,
   ensureEngine,
@@ -266,7 +267,10 @@ export async function engine(ctx: CommandContext): Promise<CommandResult> {
     case 'install': {
       const ref = ctx.args.args[0] ?? ctx.args.engineVersion ?? 'stable'
       const outcome = await installEngine(ctx.cfg, ref, ctx.notice)
-      return ok({ ...outcome, sizeMb: ENGINE_DOWNLOAD_MB })
+      // Two keys, not one `sizeMb`. The single key reported a number that
+      // matched neither quantity, and no consumer could have told which one it
+      // meant; a name that has to stand for both is the bug, not the value.
+      return ok({ ...outcome, downloadMb: ENGINE_DOWNLOAD_MB, diskMb: ENGINE_DISK_MB })
     }
 
     case 'update': {
@@ -314,7 +318,9 @@ export async function doctor(ctx: CommandContext): Promise<CommandResult> {
   const [eng, daemon] = await Promise.all([engineStatus(ctx.cfg), daemonStatus(ctx.cfg)])
   const problems: string[] = []
   if (!eng.executablePath) {
-    problems.push(`no engine resolved — run: bbb engine install stable (~${ENGINE_DOWNLOAD_MB}MB)`)
+    problems.push(
+      `no engine resolved — run: bbb engine install stable (~${ENGINE_DOWNLOAD_MB}MB download, ~${ENGINE_DISK_MB}MB on disk)`,
+    )
   }
   if (eng.drifted) {
     problems.push(

@@ -5,7 +5,7 @@
  * Engines deliberately live in a user-level cache rather than under
  * node_modules. Two reasons, both learned the hard way:
  *
- *  - A ~180MB binary under node_modules is re-downloaded on every reinstall and
+ *  - A ~190MB binary under node_modules is re-downloaded on every reinstall and
  *    duplicated per project. Four tools each keeping their own copy is how this
  *    machine lost a gigabyte.
  *  - A global install and a project-local install then share one engine instead

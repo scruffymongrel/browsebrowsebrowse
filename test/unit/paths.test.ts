@@ -12,7 +12,7 @@ import {
 const HOME = '/home/a'
 
 describe('cacheRoot', () => {
-  // Outside node_modules on purpose: a ~180MB binary there is re-downloaded on
+  // Outside node_modules on purpose: a ~190MB binary there is re-downloaded on
   // every reinstall and duplicated per project.
   test('is a user-level cache, not a project one', () => {
     expect(cacheRoot({}, HOME)).toBe('/home/a/.cache/browsebrowsebrowse')

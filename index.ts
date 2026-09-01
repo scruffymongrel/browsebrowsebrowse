@@ -17,6 +17,7 @@ export {
   pruneEngines,
   readManifest,
   resolve as resolveEngine,
+  ENGINE_DISK_MB,
   ENGINE_DOWNLOAD_MB,
   type EngineStatus,
   type InstallOutcome,

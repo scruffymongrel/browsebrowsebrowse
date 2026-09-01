@@ -54,6 +54,33 @@ describe('packaging', () => {
     expect(floor.replace(/^>=/, '').startsWith(abbrev)).toBe(true)
   })
 
+  // The README quotes the non-interactive refusal *verbatim*, which is the
+  // purest case of rule 1: a string that must match another file's output. It
+  // is composed here from src/engine.ts's own template and constants rather
+  // than imported, because loading an impure module into the unit run would
+  // drag it into the src/pure/ coverage gate.
+  test('the README quotes the refusal message the CLI actually prints', () => {
+    const engine = readFileSync(resolve(root, 'src/engine.ts'), 'utf8')
+    const constant = (name: string): string =>
+      engine.match(new RegExp(`export const ${name} = (\\d+)`))?.[1] ?? ''
+    const download = constant('ENGINE_DOWNLOAD_MB')
+    const disk = constant('ENGINE_DISK_MB')
+    expect(download).not.toBe('')
+    expect(disk).not.toBe('')
+
+    const template = engine.match(/`(Refusing to download [^`]*?)\\n`/)?.[1] ?? ''
+    expect(template).not.toBe('')
+    const line = template
+      .replaceAll('${ENGINE_DOWNLOAD_MB}', download)
+      .replaceAll('${ENGINE_DISK_MB}', disk)
+
+    // Both quantities, every time: at the consent moment the transfer cost and
+    // the lasting disk cost are different questions.
+    expect(line).toContain(`~${download}MB`)
+    expect(line).toContain(`~${disk}MB`)
+    expect(readFileSync(resolve(root, 'README.md'), 'utf8')).toContain(line)
+  })
+
   // `bun run release` is the documented path and the raw `gh workflow run` is
   // the escape hatch, because CI releases origin/main rather than what you
   // have. If the script or the docs go, the invariant goes silently with them.

@@ -61,17 +61,17 @@ Deno needs neither Node nor the shebang: `deno install -g` writes its own `#!/bi
 
 ### The engine
 
-`bbb` needs a Chrome engine (`chrome-headless-shell`, **~190MB** on disk — 193MB measured for 152.0.7977.64 on 2026-09-01). It installs one on first use **at an interactive terminal**, after printing what it is about to fetch. Anywhere non-interactive — CI, a pipe, a script — it exits `3` and prints the command instead:
+`bbb` needs a Chrome engine (`chrome-headless-shell`): **~95MB** to download, **~190MB** on disk once extracted. It installs one on first use **at an interactive terminal**, after printing what it is about to fetch. Anywhere non-interactive — CI, a pipe, a script — it exits `3` and prints the command instead:
 
 ```
 SETUP ERROR: no Chrome engine installed.
-Refusing to download ~180MB unprompted in a non-interactive session.
+Refusing to download ~95MB (~190MB on disk) unprompted in a non-interactive session.
 Run:  bbb engine install stable
 ```
 
 A surprise engine download in somebody's pipeline is a bug, not a convenience.
 
-(The notice says `~180MB` because that is `ENGINE_DOWNLOAD_MB` in `src/engine.ts`, a fixed pre-download estimate. The ~190MB above is what the extracted engine actually occupies on disk, measured. The two are different quantities and the estimate has not been re-measured as a *download*.)
+(Both figures are estimates rounded to the nearest 5MB, and every notice states both — at the moment you say yes, the transfer and the lasting disk cost are different questions. Measured 2026-09-01 for 152.0.7977.64 on mac-arm64: 93MB over the wire, 194MB extracted. They grow with Chrome.)
 
 Engines live in `~/.cache/browsebrowsebrowse/engines/<version>/` — **outside `node_modules`**, so they survive reinstalls and one copy is shared by every project, global or local. This is the whole point of the `engine` verb: four tools each downloading their own Chrome is how a laptop loses a gigabyte.
 

@@ -64,7 +64,7 @@ One gap worth knowing: on a **Bun-only machine with no Node on `PATH`**, a globa
 
 `deno install -g` installs one command, named after the package. For the short alias: `deno install -g -A --name bbb npm:browsebrowsebrowse`.
 
-Check with `bbb doctor`. On first use `bbb` needs a Chrome engine (~190MB on disk, one-time, shared across all projects; the install notice quotes a rounder ~180MB pre-download estimate): at a terminal it installs one after printing a notice; anywhere non-interactive it exits 3 and prints `bbb engine install stable`. It **never** downloads unprompted in CI.
+Check with `bbb doctor`. On first use `bbb` needs a Chrome engine (~95MB to download, ~190MB on disk, one-time, shared across all projects — the notices quote both): at a terminal it installs one after printing a notice; anywhere non-interactive it exits 3 and prints `bbb engine install stable`. It **never** downloads unprompted in CI.
 
 ### Version drift (plugin vs CLI)
 

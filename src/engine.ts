@@ -54,12 +54,19 @@ import {
 } from './pure/versions.ts'
 
 /**
- * The size quoted in the pre-download consent notice. Deliberately an estimate
- * of the *download*, which is not the same quantity as the extracted engine on
- * disk — that measured 193MB for 152.0.7977.64 on 2026-09-01, and the docs
- * round it to ~190MB. See AGENTS.md, "What this is", before reconciling them.
+ * The two sizes quoted at the consent moment: what crosses the network, and
+ * what it costs on disk afterwards. They are different quantities and a user
+ * about to say yes needs both, so every notice states both.
+ *
+ * Measured 2026-09-01 for `chrome-headless-shell` 152.0.7977.64 on mac-arm64:
+ * `Content-Length` on the Chrome-for-Testing zip was 93MB, and `du -sm` of the
+ * installed engine was 194MB. Rounded here to the nearest 5MB, because these
+ * are estimates for a sentence rather than assertions. Both drift upwards as
+ * Chrome grows and neither is platform-independent — re-measure rather than
+ * trusting the stamp. AGENTS.md, "What this is", carries the reasoning.
  */
-export const ENGINE_DOWNLOAD_MB = 180
+export const ENGINE_DOWNLOAD_MB = 95
+export const ENGINE_DISK_MB = 190
 
 export const nodeProbe: EngineProbe = {
   kind(path: string): PathKind {
@@ -155,7 +162,7 @@ export async function installEngine(
 
   if (!alreadyPresent) {
     onNotice(
-      `browsebrowsebrowse: installing chrome-headless-shell ${version} (~${ENGINE_DOWNLOAD_MB}MB) into ${dest}`,
+      `browsebrowsebrowse: installing chrome-headless-shell ${version} (~${ENGINE_DOWNLOAD_MB}MB download, ~${ENGINE_DISK_MB}MB on disk) into ${dest}`,
     )
     mkdirSync(dest, { recursive: true })
     await install({
@@ -224,7 +231,7 @@ export async function ensureEngine(
   if (!allowed) {
     throw new SetupError(
       `${first.message}.\n` +
-        `Refusing to download ~${ENGINE_DOWNLOAD_MB}MB unprompted in a non-interactive session.\n` +
+        `Refusing to download ~${ENGINE_DOWNLOAD_MB}MB (~${ENGINE_DISK_MB}MB on disk) unprompted in a non-interactive session.\n` +
         `Run:  ${command}`,
     )
   }

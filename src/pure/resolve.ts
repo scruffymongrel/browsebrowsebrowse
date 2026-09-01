@@ -106,8 +106,9 @@ export function resolveEngine(input: ResolveInput): EngineResolution {
 }
 
 /**
- * Whether it is acceptable to download the engine without being asked. (Its
- * size is `ENGINE_DOWNLOAD_MB`; AGENTS.md has the measured figure.)
+ * Whether it is acceptable to download the engine without being asked. (What
+ * it costs is `ENGINE_DOWNLOAD_MB` over the network and `ENGINE_DISK_MB` after
+ * extraction; both are stamped estimates, and AGENTS.md has the measurements.)
  *
  * Yes at an interactive terminal, where the user sees the notice and can Ctrl-C.
  * Never in CI: a surprise engine fetch in someone's pipeline is a bug, so the
